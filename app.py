@@ -250,4 +250,49 @@ with tab3:
         c1_val = st.number_input("Stock 농도 (C1)", min_value=0.0001, value=10.0, format="%.4f")
         c1_unit = st.selectbox("C1 단위", list(unit_map.keys()), index=1, key="c1_u")
     with d_col2:
-        c2_val = st.number_input("목표 최종 농도 (C2)", min_value
+        c2_val = st.number_input("목표 최종 농도 (C2)", min_value=0.0001, value=10.0, format="%.4f")
+        c2_unit = st.selectbox("C2 단위", list(unit_map.keys()), index=2, key="c2_u")
+        
+    v2_col1, v2_col2 = st.columns(2)
+    with v2_col1:
+        v2_val = st.number_input("만들 최종 용액 부피 (V2)", min_value=0.001, value=1000.0, format="%.2f")
+    with v2_col2:
+        v2_unit = st.selectbox("V2 부피 단위", ["μL", "mL"], index=0)
+
+    c1_in_m = c1_val * unit_map[c1_unit]
+    c2_in_m = c2_val * unit_map[c2_unit]
+    v2_in_ul = v2_val if v2_unit == "μL" else v2_val * 1000.0
+
+    if c1_in_m > 0:
+        if c2_in_m > c1_in_m:
+            st.error("⚠️ 목표 농도(C2)가 Stock 농도(C1)보다 높을 수 없습니다.")
+        else:
+            v1_in_ul = (c2_in_m * v2_in_ul) / c1_in_m
+            solvent_in_ul = v2_in_ul - v1_in_ul
+            dilution_ratio = c1_in_m / c2_in_m if c2_in_m > 0 else 0
+
+            dm1, dm2, dm3 = st.columns(3)
+            dm1.metric("필요한 Stock 부피 (V1)", f"{v1_in_ul:,.2f} μL", f"{v1_in_ul/1000:.4f} mL")
+            dm2.metric("용매(Media/DMSO) 부피", f"{solvent_in_ul:,.2f} μL", f"{solvent_in_ul/1000:.4f} mL")
+            dm3.metric("희석 배수 (Dilution Factor)", f"1 : {dilution_ratio:,.1f}")
+
+    st.markdown("---")
+
+    st.subheader("2. 분말 시약 Stock 제조 계산 (Molarity → Mass)")
+    m_col1, m_col2, m_col3 = st.columns(3)
+    with m_col1:
+        mw = st.number_input("분자량 (Molecular Weight, g/mol)", min_value=0.1, value=350.0, format="%.2f")
+    with m_col2:
+        target_m_val = st.number_input("목표 Stock 농도", min_value=0.001, value=10.0, format="%.3f")
+        target_m_unit = st.selectbox("Stock 농도 단위", ["M", "mM", "μM"], index=1)
+    with m_col3:
+        target_vol_ml = st.number_input("제조할 용액 부피 (mL)", min_value=0.01, value=1.0, format="%.2f")
+
+    conc_m = target_m_val * unit_map[target_m_unit]
+    vol_l = target_vol_ml / 1000.0
+    mass_g = conc_m * vol_l * mw
+    mass_mg = mass_g * 1000.0
+
+    mm1, mm2 = st.columns(2)
+    mm1.metric("필요한 시약 무게 (mg)", f"{mass_mg:,.3f} mg")
+    mm2.metric("필요한 시약 무게 (μg)", f"{mass_mg * 1000:,.1f} μg")
