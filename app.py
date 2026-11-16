@@ -269,4 +269,21 @@ with tab3:
 
     st.markdown("---")
 
-    st.subheader("2. 분
+    st.subheader("2. 분말 시약 Stock 제조 계산 (Molarity → Mass)")
+    m_col1, m_col2, m_col3 = st.columns(3)
+    with m_col1:
+        mw = st.number_input("분자량 (Molecular Weight, g/mol)", min_value=0.1, value=350.0, format="%.2f")
+    with m_col2:
+        target_m_val = st.number_input("목표 Stock 농도", min_value=0.001, value=10.0, format="%.3f")
+        target_m_unit = st.selectbox("Stock 농도 단위", ["M", "mM", "μM"], index=1)
+    with m_col3:
+        target_vol_ml = st.number_input("제조할 용액 부피 (mL)", min_value=0.01, value=1.0, format="%.2f")
+
+    conc_m = target_m_val * unit_map[target_m_unit]
+    vol_l = target_vol_ml / 1000.0
+    mass_g = conc_m * vol_l * mw
+    mass_mg = mass_g * 1000.0
+
+    mm1, mm2 = st.columns(2)
+    mm1.metric("필요한 시약 무게 (mg)", f"{mass_mg:,.3f} mg")
+    mm2.metric("필요한 시약 무게 (μg)", f"{mass_mg * 1000:,.1f} μg")
