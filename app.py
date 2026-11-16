@@ -110,7 +110,7 @@ with tab1:
 
 
 # ==============================================================================
-# TAB 2: Counting 기록지 (세로형 Duplicate 구조) & 필요 세포 수 계산기
+# TAB 2: Counting 기록지 (Duplicate 순차 입력 및 평균값 강조)
 # ==============================================================================
 with tab2:
     st.subheader("1. Counting 결과 기록지 (Duplicate 순차 입력)")
@@ -123,7 +123,7 @@ with tab2:
             
             st.markdown("---")
             
-            # 1회차 입력 영역 (위쪽)
+            # 1회차 입력 영역
             st.markdown("🔹 **1회차 측정 (Count #1 & Viability #1)**")
             dc1, dc2 = st.columns(2)
             c1_val = dc1.number_input("Count #1 (×10⁶ cells/mL)", min_value=0.0, value=2.50, step=0.01, format="%.2f")
@@ -131,7 +131,7 @@ with tab2:
             
             st.markdown("")
             
-            # 2회차 입력 영역 (아래쪽)
+            # 2회차 입력 영역
             st.markdown("🔹 **2회차 측정 (Count #2 & Viability #2)** *(※ 1회만 측정한 경우 0으로 두세요)*")
             dc3, dc4 = st.columns(2)
             c2_val = dc3.number_input("Count #2 (×10⁶ cells/mL)", min_value=0.0, value=2.60, step=0.01, format="%.2f")
@@ -140,32 +140,34 @@ with tab2:
             st.markdown("---")
             cnt_note = st.text_input("비고", placeholder="예: 1:1 Trypan blue 희석")
             
-            if st.form_submit_button("Counting 기록 저장", type="primary"):
-                # 평균 계산 로직 (2회차 값이 0이면 1회차 값만 사용)
+            submitted_cnt = st.form_submit_button("Counting 기록 저장", type="primary")
+            if submitted_cnt:
+                # 평균 계산 로직
                 if c2_val > 0:
                     avg_c = (c1_val + c2_val) / 2.0
-                    cnt_conc_str = f"{avg_c:.2f} × 10⁶ cells/mL (#1: {c1_val}, #2: {c2_val})"
+                    conc_display = f"{avg_c:.2f} × 10⁶ cells/mL (단일: {c1_val}, {c2_val})"
                 else:
                     avg_c = c1_val
-                    cnt_conc_str = f"{avg_c:.2f} × 10⁶ cells/mL"
+                    conc_display = f"{avg_c:.2f} × 10⁶ cells/mL"
 
                 if v2_val > 0:
                     avg_v = (v1_val + v2_val) / 2.0
-                    cnt_viab_str = f"{avg_v:.1f}% (#1: {v1_val}%, #2: {v2_val}%)"
+                    viab_display = f"{avg_v:.1f}% (단일: {v1_val}%, {v2_val}%)"
                 else:
                     avg_v = v1_val
-                    cnt_viab_str = f"{avg_v:.1f}%"
+                    viab_display = f"{avg_v:.1f}%"
 
                 cnt_entry = {
                     "날짜": cnt_date,
                     "세포주": cnt_cell,
                     "Passage": cnt_pass,
-                    "평균 세포 농도": cnt_conc_str,
-                    "평균 생존율": cnt_viab_str,
+                    "평균 세포 농도": conc_display,
+                    "평균 생존율": viab_display,
+                    "raw_avg_conc": avg_c,  # 아래 계산기 연동용 숫자 값
                     "비고": cnt_note
                 }
                 st.session_state.counting_log.insert(0, cnt_entry)
-                st.success(f"✅ Counting 기록 저장 완료! (평균 농도: {avg_c:.2f} × 10⁶ cells/mL, 평균 생존율: {avg_v:.1f}%)")
+                st.success(f"✅ 저장 완료! ➔ **평균 농도: {avg_c:.2f} × 10⁶ cells/mL | 평균 생존율: {avg_v:.1f}%**")
                 st.rerun()
 
     if st.session_state.counting_log:
@@ -174,7 +176,7 @@ with tab2:
             with st.container(border=True):
                 ch1, ch2, ch3 = st.columns([2, 2, 1])
                 ch1.markdown(f"**🧬 세포주:** {item['세포주']} ({item['Passage']})")
-                ch2.markdown(f"**평균 농도:** {item['평균 세포 농도']}")
+                ch2.markdown(f"🔥 **평균 농도:** {item['평균 세포 농도']}")
                 ch3.markdown(f"**날짜:** {item['날짜']}")
                 
                 cb1, cb2 = st.columns(2)
@@ -186,10 +188,12 @@ with tab2:
                     st.session_state.counting_log.pop(idx)
                     st.rerun()
 
+        # CSV 내보내기를 위해 화면 표시용 dict 복사 후 raw 데이터 키 제거
+        export_data = [{k: v for k, v in item.items() if k != 'raw_avg_conc'} for item in st.session_state.counting_log]
         output2 = io.StringIO()
-        writer2 = csv.DictWriter(output2, fieldnames=st.session_state.counting_log[0].keys())
+        writer2 = csv.DictWriter(output2, fieldnames=export_data[0].keys())
         writer2.writeheader()
-        writer2.writerows(st.session_state.counting_log)
+        writer2.writerows(export_data)
         
         st.markdown("---")
         cbtn1, cbtn2 = st.columns([1, 4])
@@ -210,9 +214,14 @@ with tab2:
     st.subheader("2. 필요 세포 수 & Medium 계산기")
     st.caption("측정된 평균 세포 농도와 Well당 분주 부피를 입력하면 필요한 세포 현탁액 및 배지(Medium) 부피를 계산합니다.")
     
+    # 최근 저장된 평균값이 있다면 기본값으로 불러오기
+    default_conc = 1.50
+    if st.session_state.counting_log and 'raw_avg_conc' in st.session_state.counting_log[0]:
+        default_conc = float(st.session_state.counting_log[0]['raw_avg_conc'])
+
     calc_c1, calc_c2 = st.columns(2)
     with calc_c1:
-        measured_conc_val = st.number_input("측정된 세포 농도 (평균, × 10⁶ cells/mL)", min_value=0.01, value=1.50, step=0.1, format="%.2f")
+        measured_conc_val = st.number_input("측정된 세포 농도 (평균, × 10⁶ cells/mL)", min_value=0.01, value=default_conc, step=0.1, format="%.2f")
         vol_per_well_ml = st.number_input("Seeding에 필요한 Well당 부피 (Medium 량, mL)", min_value=0.05, value=1.0, step=0.1, format="%.2f")
     with calc_c2:
         cells_per_unit = st.number_input("Well당 필요한 세포 수 (cells/well)", min_value=100, value=100000, step=10000)
