@@ -18,7 +18,7 @@ if "counting_log" not in st.session_state:
     st.session_state.counting_log = []
 
 st.title("🧪 Lab Assistant: 세포 배양 & 약물 계산기")
-st.caption("세포주 배양 관리 · Counting 기록 & 필요 세포 계산 · 약물 희석 계산")
+st.caption("세포주 배양 관리 · Duplicate Counting 기록 & 필요 세포 계산 · 약물 희석 계산")
 
 # 3개 탭 구성
 tab1, tab2, tab3 = st.tabs([
@@ -50,7 +50,7 @@ with tab1:
             m_media = c4.text_input("배지 조건", value="DMEM + 10% FBS + 1% AA")
             m_cultured_cells = c5.text_input("배양 세포수", placeholder="예: 1.0 × 10⁶ cells / 100mm dish")
             
-            m_note = st.text_input("비고", placeholder="특이사항, 컨플루언시, 계대배양 비율 등")
+            m_note = c5.text_input("비고", placeholder="특이사항, 컨플루언시, 계대배양 비율 등") if False else st.text_input("비고", placeholder="특이사항, 컨플루언시, 계대배양 비율 등")
             
             submitted = st.form_submit_button("배양 기록 추가", type="primary")
             if submitted and m_cell:
@@ -110,33 +110,53 @@ with tab1:
 
 
 # ==============================================================================
-# TAB 2: Counting 기록지 & 필요 세포 수 계산기
+# TAB 2: Counting 기록지 (Duplicate 반영) & 필요 세포 수 계산기
 # ==============================================================================
 with tab2:
-    st.subheader("1. Counting 결과 기록지")
-    with st.expander("➕ Counting 결과 기록하기", expanded=True):
+    st.subheader("1. Counting 결과 기록지 (Duplicate 입력)")
+    with st.expander("➕ Counting 결과 기록하기 (Duplicate)", expanded=True):
         with st.form("counting_log_form", clear_on_submit=True):
             fc1, fc2, fc3 = st.columns(3)
             cnt_date = fc1.text_input("날짜", value=datetime.now().strftime("%Y-%m-%d"))
             cnt_cell = fc2.selectbox("세포주", ["Hs578T", "AGS", "SNU601", "HPAF-2", "HT-29", "JIMT-1", "B16F10", "기타"], key="cnt_cell_box")
             cnt_pass = fc3.text_input("Passage", value="P12", key="cnt_pass_box")
             
-            fc4, fc5, fc6 = st.columns(3)
-            cnt_conc = fc4.text_input("세포 농도", value="1.50 × 10⁶ cells/mL")
-            cnt_viab = fc5.text_input("생존율 (Viability %)", value="95.0%")
-            cnt_note = fc6.text_input("비고", placeholder="예: 1:1 Trypan blue")
+            st.markdown("---")
+            st.caption("🔬 **Cell Count & Viability (Duplicate #1, #2 입력)**")
+            dc1, dc2, dc3, dc4 = st.columns(4)
+            c1_val = dc1.number_input("Count #1 (×10⁶ cells/mL)", min_value=0.0, value=2.50, step=0.01, format="%.2f")
+            c2_val = dc2.number_input("Count #2 (×10⁶ cells/mL)", min_value=0.0, value=2.60, step=0.01, format="%.2f")
+            v1_val = dc3.number_input("Viability #1 (%)", min_value=0.0, max_value=100.0, value=95.0, step=0.1, format="%.1f")
+            v2_val = dc4.number_input("Viability #2 (%)", min_value=0.0, max_value=100.0, value=96.0, step=0.1, format="%.1f")
+
+            cnt_note = st.text_input("비고", placeholder="예: 1:1 Trypan blue 희석")
             
             if st.form_submit_button("Counting 기록 저장", type="primary"):
+                # 평균 계산 로직 (2회차 값이 0이면 1회차 값만 사용)
+                if c2_val > 0:
+                    avg_c = (c1_val + c2_val) / 2.0
+                    cnt_conc_str = f"{avg_c:.2f} × 10⁶ cells/mL (단일: {c1_val}, {c2_val})"
+                else:
+                    avg_c = c1_val
+                    cnt_conc_str = f"{avg_c:.2f} × 10⁶ cells/mL"
+
+                if v2_val > 0:
+                    avg_v = (v1_val + v2_val) / 2.0
+                    cnt_viab_str = f"{avg_v:.1f}% (단일: {v1_val}%, {v2_val}%)"
+                else:
+                    avg_v = v1_val
+                    cnt_viab_str = f"{avg_v:.1f}%"
+
                 cnt_entry = {
                     "날짜": cnt_date,
                     "세포주": cnt_cell,
                     "Passage": cnt_pass,
-                    "세포 농도": cnt_conc,
-                    "생존율 (%)": cnt_viab,
+                    "평균 세포 농도": cnt_conc_str,
+                    "평균 생존율": cnt_viab_str,
                     "비고": cnt_note
                 }
                 st.session_state.counting_log.insert(0, cnt_entry)
-                st.success("✅ Counting 기록이 추가되었습니다!")
+                st.success(f"✅ Counting 기록 저장 완료! (평균 농도: {avg_c:.2f} × 10⁶ cells/mL, 평균 생존율: {avg_v:.1f}%)")
                 st.rerun()
 
     if st.session_state.counting_log:
@@ -145,11 +165,11 @@ with tab2:
             with st.container(border=True):
                 ch1, ch2, ch3 = st.columns([2, 2, 1])
                 ch1.markdown(f"**🧬 세포주:** {item['세포주']} ({item['Passage']})")
-                ch2.markdown(f"**농도:** {item['세포 농도']}")
+                ch2.markdown(f"**평균 농도:** {item['평균 세포 농도']}")
                 ch3.markdown(f"**날짜:** {item['날짜']}")
                 
                 cb1, cb2 = st.columns(2)
-                cb1.text(f"생존율: {item['생존율 (%)']}")
+                cb1.text(f"평균 생존율: {item['평균 생존율']}")
                 if item['비고']:
                     cb2.text(f"비고: {item['비고']}")
                 
@@ -179,11 +199,11 @@ with tab2:
     st.markdown("---")
     
     st.subheader("2. 필요 세포 수 & Medium 계산기")
-    st.caption("측정된 세포 농도와 Well당 분주 부피를 입력하면 필요한 세포 현탁액 및 배지(Medium) 부피를 계산합니다.")
+    st.caption("측정된 평균 세포 농도와 Well당 분주 부피를 입력하면 필요한 세포 현탁액 및 배지(Medium) 부피를 계산합니다.")
     
     calc_c1, calc_c2 = st.columns(2)
     with calc_c1:
-        measured_conc_val = st.number_input("측정된 세포 농도 (× 10⁶ cells/mL)", min_value=0.01, value=1.50, step=0.1, format="%.2f")
+        measured_conc_val = st.number_input("측정된 세포 농도 (평균, × 10⁶ cells/mL)", min_value=0.01, value=1.50, step=0.1, format="%.2f")
         vol_per_well_ml = st.number_input("Seeding에 필요한 Well당 부피 (Medium 량, mL)", min_value=0.05, value=1.0, step=0.1, format="%.2f")
     with calc_c2:
         cells_per_unit = st.number_input("Well당 필요한 세포 수 (cells/well)", min_value=100, value=100000, step=10000)
@@ -249,21 +269,4 @@ with tab3:
 
     st.markdown("---")
 
-    st.subheader("2. 분말 시약 Stock 제조 계산 (Molarity → Mass)")
-    m_col1, m_col2, m_col3 = st.columns(3)
-    with m_col1:
-        mw = st.number_input("분자량 (Molecular Weight, g/mol)", min_value=0.1, value=350.0, format="%.2f")
-    with m_col2:
-        target_m_val = st.number_input("목표 Stock 농도", min_value=0.001, value=10.0, format="%.3f")
-        target_m_unit = st.selectbox("Stock 농도 단위", ["M", "mM", "μM"], index=1)
-    with m_col3:
-        target_vol_ml = st.number_input("제조할 용액 부피 (mL)", min_value=0.01, value=1.0, format="%.2f")
-
-    conc_m = target_m_val * unit_map[target_m_unit]
-    vol_l = target_vol_ml / 1000.0
-    mass_g = conc_m * vol_l * mw
-    mass_mg = mass_g * 1000.0
-
-    mm1, mm2 = st.columns(2)
-    mm1.metric("필요한 시약 무게 (mg)", f"{mass_mg:,.3f} mg")
-    mm2.metric("필요한 시약 무게 (μg)", f"{mass_mg * 1000:,.1f} μg")
+    st.subheader("2. 분
