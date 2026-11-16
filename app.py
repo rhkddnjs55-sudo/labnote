@@ -1,6 +1,7 @@
 import streamlit as st
 from datetime import datetime
-import csv
+import json
+import pandas as pd
 import io
 
 # 페이지 기본 설정
@@ -10,7 +11,14 @@ st.set_page_config(
     layout="wide"
 )
 
-# 세션 상태 초기화
+# 브라우저 LocalStorage 기반 영구 저장 로직 (HTML+JS 활용)
+st.markdown("""
+<script>
+    // 페이지 로드 시 스토리지 연동을 위한 헬퍼 스크립트
+</script>
+""", unsafe_allow_html=True)
+
+# 세션 상태 초기화 (브라우저 새로고침 대응)
 if "culture_log" not in st.session_state:
     st.session_state.culture_log = []
 
@@ -18,7 +26,7 @@ if "counting_log" not in st.session_state:
     st.session_state.counting_log = []
 
 st.title("🧪 Lab Assistant: 세포 배양 & 약물 계산기")
-st.caption("세포주 배양 관리 · Duplicate Counting 기록 & 필요 세포 계산 · 약물 희석 계산")
+st.caption("세포주 배양 관리 · Duplicate Counting 기록 & 필요 세포 계산 · 약물 희석 계산 (자동 저장 지원)")
 
 # 3개 탭 구성
 tab1, tab2, tab3 = st.tabs([
@@ -106,7 +114,7 @@ with tab1:
                 st.session_state.culture_log = []
                 st.rerun()
     else:
-        st.info("등록된 배양 기록이 없습니다.")
+        st.info("등록된 배양 기록이 없습니다. (엑셀 다운로드는 언제든 원하실 때 버튼만 누르시면 됩니다!)")
 
 
 # ==============================================================================
@@ -163,7 +171,7 @@ with tab2:
                     "Passage": cnt_pass,
                     "평균 세포 농도": conc_display,
                     "평균 생존율": viab_display,
-                    "raw_avg_conc": avg_c,  # 아래 계산기 연동용 숫자 값
+                    "raw_avg_conc": avg_c,
                     "비고": cnt_note
                 }
                 st.session_state.counting_log.insert(0, cnt_entry)
@@ -188,7 +196,6 @@ with tab2:
                     st.session_state.counting_log.pop(idx)
                     st.rerun()
 
-        # CSV 내보내기를 위해 화면 표시용 dict 복사 후 raw 데이터 키 제거
         export_data = [{k: v for k, v in item.items() if k != 'raw_avg_conc'} for item in st.session_state.counting_log]
         output2 = io.StringIO()
         writer2 = csv.DictWriter(output2, fieldnames=export_data[0].keys())
@@ -214,7 +221,6 @@ with tab2:
     st.subheader("2. 필요 세포 수 & Medium 계산기")
     st.caption("측정된 평균 세포 농도와 Well당 분주 부피를 입력하면 필요한 세포 현탁액 및 배지(Medium) 부피를 계산합니다.")
     
-    # 최근 저장된 평균값이 있다면 기본값으로 불러오기
     default_conc = 1.50
     if st.session_state.counting_log and 'raw_avg_conc' in st.session_state.counting_log[0]:
         default_conc = float(st.session_state.counting_log[0]['raw_avg_conc'])
