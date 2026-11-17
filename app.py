@@ -11,45 +11,15 @@ st.set_page_config(
     layout="wide"
 )
 
-# 데이터 저장을 위한 파일 경로
-CULTURE_FILE = "culture_log_data.csv"
-COUNTING_FILE = "counting_log_data.csv"
-
-# 세션 상태 초기화 (csv 파일에서 데이터 불러오기)
+# 세션 상태 초기화
 if "culture_log" not in st.session_state:
-    if os.path.exists(CULTURE_FILE):
-        try:
-            df_c = pd.read_csv(CULTURE_FILE)
-            st.session_state.culture_log = df_c.to_dict(orient="records")
-        except:
-            st.session_state.culture_log = []
-    else:
-        st.session_state.culture_log = []
+    st.session_state.culture_log = []
 
 if "counting_log" not in st.session_state:
-    if os.path.exists(COUNTING_FILE):
-        try:
-            df_cnt = pd.read_csv(COUNTING_FILE)
-            st.session_state.counting_log = df_cnt.to_dict(orient="records")
-        except:
-            st.session_state.counting_log = []
-    else:
-        st.session_state.counting_log = []
-
-def save_culture_data():
-    if st.session_state.culture_log:
-        pd.DataFrame(st.session_state.culture_log).to_csv(CULTURE_FILE, index=False, encoding="utf-8-sig")
-    elif os.path.exists(CULTURE_FILE):
-        os.remove(CULTURE_FILE)
-
-def save_counting_data():
-    if st.session_state.counting_log:
-        pd.DataFrame(st.session_state.counting_log).to_csv(COUNTING_FILE, index=False, encoding="utf-8-sig")
-    elif os.path.exists(COUNTING_FILE):
-        os.remove(COUNTING_FILE)
+    st.session_state.counting_log = []
 
 st.title("🧪 Lab Assistant: 세포 배양 & 약물 계산기")
-st.caption("세포주 배양 관리 · Duplicate Counting 기록 & 필요 세포 계산 · 약물 희석 계산 (자동 파일 저장 지원)")
+st.caption("세포주 배양 관리 · Duplicate Counting 기록 & 필요 세포 계산 · 약물 희석 계산 (CSV 백업/복원 지원)")
 
 # 3개 탭 구성
 tab1, tab2, tab3 = st.tabs([
@@ -63,6 +33,17 @@ tab1, tab2, tab3 = st.tabs([
 # ==============================================================================
 with tab1:
     st.subheader("📋 세포주 배양 이력 관리")
+
+    # 과거 기록 CSV 파일 업로드 기능
+    with st.expander("📂 이전 배양 기록(CSV) 불러오기", expanded=False):
+        uploaded_culture_file = st.file_uploader("예전에 다운로드한 배양 기록 CSV 파일을 업로드하세요", type=["csv"], key="cult_up")
+        if uploaded_culture_file is not None:
+            try:
+                df_load = pd.read_csv(uploaded_culture_file)
+                st.session_state.culture_log = df_load.to_dict(orient="records")
+                st.success("✅ 이전 배양 기록을 성공적으로 불러왔습니다!")
+            except Exception as e:
+                st.error(f"파일을 읽는 중 오류가 발생했습니다: {e}")
 
     with st.expander("➕ 새 배양 기록 추가하기", expanded=True):
         with st.form("culture_log_form", clear_on_submit=True):
@@ -94,8 +75,7 @@ with tab1:
                     "비고": m_note if m_note else ""
                 }
                 st.session_state.culture_log.insert(0, new_entry)
-                save_culture_data()
-                st.success("✅ 배양 기록이 저장되었습니다!")
+                st.success("✅ 배양 기록이 추가되었습니다!")
                 st.rerun()
 
     st.markdown("---")
@@ -105,19 +85,18 @@ with tab1:
         for idx, item in enumerate(st.session_state.culture_log):
             with st.container(border=True):
                 h1, h2, h3 = st.columns([2, 2, 1])
-                h1.markdown(f"**🧬 세포주:** {item['세포주']}")
-                h2.markdown(f"**Passage:** {item['Passage']}")
-                h3.markdown(f"**날짜:** {item['날짜']}")
+                h1.markdown(f"**🧬 세포주:** {item.get('세포주', '')}")
+                h2.markdown(f"**Passage:** {item.get('Passage', '')}")
+                h3.markdown(f"**날짜:** {item.get('날짜', '')}")
                 
                 b1, b2 = st.columns(2)
-                b1.text(f"배지 조건: {item['배지 조건']}")
-                b2.text(f"배양 세포수: {item['배양 세포수']}")
+                b1.text(f"배지 조건: {item.get('배지 조건', '')}")
+                b2.text(f"배양 세포수: {item.get('배양 세포수', '')}")
                 if item.get('비고'):
-                    st.text(f"비고: {item['비고']}")
+                    st.text(f"비고: {item.get('비고', '')}")
                 
                 if st.button("🗑️ 삭제", key=f"del_cult_{idx}"):
                     st.session_state.culture_log.pop(idx)
-                    save_culture_data()
                     st.rerun()
 
         df_out1 = pd.DataFrame(st.session_state.culture_log)
@@ -135,10 +114,9 @@ with tab1:
         with col_btn2:
             if st.button("🗑️ 배양 기록 전체 초기화"):
                 st.session_state.culture_log = []
-                save_culture_data()
                 st.rerun()
     else:
-        st.info("등록된 배양 기록이 없습니다.")
+        st.info("등록된 배양 기록이 없습니다. (상단의 '이전 배양 기록 불러오기'를 통해 예전 CSV 파일을 올리실 수 있습니다.)")
 
 
 # ==============================================================================
@@ -146,6 +124,17 @@ with tab1:
 # ==============================================================================
 with tab2:
     st.subheader("1. Counting 결과 기록지 (Duplicate 순차 입력)")
+    
+    with st.expander("📂 이전 Counting 기록(CSV) 불러오기", expanded=False):
+        uploaded_cnt_file = st.file_uploader("예전에 다운로드한 Counting 기록 CSV 파일을 업로드하세요", type=["csv"], key="cnt_up")
+        if uploaded_cnt_file is not None:
+            try:
+                df_cnt_load = pd.read_csv(uploaded_cnt_file)
+                st.session_state.counting_log = df_cnt_load.to_dict(orient="records")
+                st.success("✅ 이전 Counting 기록을 성공적으로 불러왔습니다!")
+            except Exception as e:
+                st.error(f"파일을 읽는 중 오류가 발생했습니다: {e}")
+
     with st.expander("➕ Counting 결과 기록하기", expanded=True):
         with st.form("counting_log_form", clear_on_submit=True):
             fc1, fc2, fc3 = st.columns(3)
@@ -155,7 +144,6 @@ with tab2:
             
             st.markdown("---")
             
-            # 1회차 입력 영역
             st.markdown("🔹 **1회차 측정 (Count #1 & Viability #1)**")
             dc1, dc2 = st.columns(2)
             c1_val = dc1.number_input("Count #1 (×10⁶ cells/mL)", min_value=0.0, value=2.50, step=0.01, format="%.2f")
@@ -163,7 +151,6 @@ with tab2:
             
             st.markdown("")
             
-            # 2회차 입력 영역
             st.markdown("🔹 **2회차 측정 (Count #2 & Viability #2)** *(※ 1회만 측정한 경우 0으로 두세요)*")
             dc3, dc4 = st.columns(2)
             c2_val = dc3.number_input("Count #2 (×10⁶ cells/mL)", min_value=0.0, value=2.60, step=0.01, format="%.2f")
@@ -174,17 +161,16 @@ with tab2:
             
             submitted_cnt = st.form_submit_button("Counting 기록 저장", type="primary")
             if submitted_cnt:
-                # 평균 계산 로직
                 if c2_val > 0:
                     avg_c = (c1_val + c2_val) / 2.0
-                    conc_display = f"{avg_c:.2f} × 10⁶ cells/mL (단일: {c1_val}, {c2_val})"
+                    conc_display = f"{avg_c:.2f} × 10⁶ cells/mL (#1: {c1_val}, #2: {c2_val})"
                 else:
                     avg_c = c1_val
                     conc_display = f"{avg_c:.2f} × 10⁶ cells/mL"
 
                 if v2_val > 0:
                     avg_v = (v1_val + v2_val) / 2.0
-                    viab_display = f"{avg_v:.1f}% (단일: {v1_val}%, {v2_val}%)"
+                    viab_display = f"{avg_v:.1f}% (#1: {v1_val}%, {v2_val}%)"
                 else:
                     avg_v = v1_val
                     viab_display = f"{avg_v:.1f}%"
@@ -199,7 +185,6 @@ with tab2:
                     "비고": cnt_note if cnt_note else ""
                 }
                 st.session_state.counting_log.insert(0, cnt_entry)
-                save_counting_data()
                 st.success(f"✅ 저장 완료! ➔ **평균 농도: {avg_c:.2f} × 10⁶ cells/mL | 평균 생존율: {avg_v:.1f}%**")
                 st.rerun()
 
@@ -208,18 +193,17 @@ with tab2:
         for idx, item in enumerate(st.session_state.counting_log):
             with st.container(border=True):
                 ch1, ch2, ch3 = st.columns([2, 2, 1])
-                ch1.markdown(f"**🧬 세포주:** {item['세포주']} ({item['Passage']})")
-                ch2.markdown(f"🔥 **평균 농도:** {item['평균 세포 농도']}")
-                ch3.markdown(f"**날짜:** {item['날짜']}")
+                ch1.markdown(f"**🧬 세포주:** {item.get('세포주', '')} ({item.get('Passage', '')})")
+                ch2.markdown(f"🔥 **평균 농도:** {item.get('평균 세포 농도', '')}")
+                ch3.markdown(f"**날짜:** {item.get('날짜', '')}")
                 
                 cb1, cb2 = st.columns(2)
-                cb1.text(f"평균 생존율: {item['평균 생존율']}")
+                cb1.text(f"평균 생존율: {item.get('평균 생존율', '')}")
                 if item.get('비고'):
-                    cb2.text(f"비고: {item['비고']}")
+                    cb2.text(f"비고: {item.get('비고', '')}")
                 
                 if st.button("🗑️ 삭제", key=f"del_cnt_{idx}"):
                     st.session_state.counting_log.pop(idx)
-                    save_counting_data()
                     st.rerun()
 
         df_out2 = pd.DataFrame(st.session_state.counting_log)
@@ -242,7 +226,6 @@ with tab2:
         with cbtn2:
             if st.button("🗑️ Counting 기록 전체 초기화"):
                 st.session_state.counting_log = []
-                save_counting_data()
                 st.rerun()
 
     st.markdown("---")
@@ -265,7 +248,6 @@ with tab2:
         cells_per_unit = st.number_input("Well당 필요한 세포 수 (cells/well)", min_value=100, value=100000, step=10000)
         num_units = st.number_input("필요한 Well 개수 (개)", min_value=1, value=10, step=1)
 
-    # 계산 로직
     conc_cells_per_ml = measured_conc_val * 1e6
     needed_total_cells = cells_per_unit * num_units
     needed_susp_vol_ml = (needed_total_cells / conc_cells_per_ml) if conc_cells_per_ml > 0 else 0
