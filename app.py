@@ -27,7 +27,7 @@ tab1, tab2, tab3 = st.tabs([
 ])
 
 # ==============================================================================
-# TAB 1: 세포주 배양 관리 (깔끔한 표 + 개별 삭제 조합)
+# TAB 1: 세포주 배양 관리 (중복 컬럼 방지 + 표에서 직접 행 삭제 가능)
 # ==============================================================================
 with tab1:
     st.subheader("📋 세포주 배양 이력 관리")
@@ -39,7 +39,15 @@ with tab1:
             if st.session_state.get("last_uploaded_file") != uploaded_culture_file.name:
                 try:
                     df_load = pd.read_csv(uploaded_culture_file)
-                    st.session_state.culture_log = df_load.astype(str).to_dict(orient="records")
+                    
+                    # 옛날 CSV 파일의 컬럼명이 다를 경우 현재 컬럼명으로 통일 (중복 컬럼 방지)
+                    if "배양 세포수" in df_load.columns and "배양 세포수 (cells/mL)" not in df_load.columns:
+                        df_load = df_load.rename(columns={"배양 세포수": "배양 세포수 (cells/mL)"})
+                    elif "배양 세포수" in df_load.columns and "배양 세포수 (cells/mL)" in df_load.columns:
+                        df_load["배양 세포수 (cells/mL)"] = df_load["배양 세포수 (cells/mL)"].fillna(df_load["배양 세포수"])
+                        df_load = df_load.drop(columns=["배양 세포수"])
+                        
+                    st.session_state.culture_log = df_load.fillna("").astype(str).to_dict(orient="records")
                     st.session_state["last_uploaded_file"] = uploaded_culture_file.name
                     st.success("✅ 이전 배양 기록을 성공적으로 불러왔습니다!")
                 except Exception as e:
@@ -85,29 +93,34 @@ with tab1:
 
     st.markdown("---")
     st.markdown("### 📄 저장된 배양 기록")
+    st.caption("💡 표에서 지우고 싶은 행의 맨 왼쪽 체크박스를 선택한 뒤, 표 우측 상단의 휴지통 아이콘(또는 키보드 Delete 키)을 누르면 바로 삭제됩니다. 셀을 더블클릭해서 내용 수정도 가능합니다!")
     
     if st.session_state.culture_log:
         df_out1 = pd.DataFrame(st.session_state.culture_log)
         
-        # 1. 깔끔하고 정돈된 표 형태로 전체 출력
-        st.dataframe(df_out1, use_container_width=True, hide_index=True)
-
-        # 2. 직관적인 개별 삭제 구역 (셀렉트박스로 선택 후 삭제)
-        st.markdown("")
-        with st.expander("🗑️ 특정 기록 삭제하기", expanded=False):
-            row_options = [f"[{i}] 날짜: {item.get('날짜')} | 세포주: {item.get('세포주')} | Passage: {item.get('Passage')}" for i, item in enumerate(st.session_state.culture_log)]
-            selected_to_delete = st.selectbox("삭제할 항목 선택", row_options, key="cult_del_select")
-            
-            del_c1, del_c2 = st.columns([1, 4])
-            with del_c1:
-                if st.button("선택 항목 삭제", type="primary", key="cult_del_btn"):
-                    idx_to_remove = int(selected_to_delete.split("]")[0].replace("[", ""))
-                    removed_item = st.session_state.culture_log.pop(idx_to_remove)
-                    st.success(f"🗑️ [{removed_item.get('세포주')}] 기록이 삭제되었습니다!")
-                    st.rerun()
+        # 고정된 6개 컬럼 순서만 깔끔하게 유지
+        desired_cols = ["날짜", "세포주", "Passage", "배지 조건", "배양 세포수 (cells/mL)", "비고"]
+        for col in desired_cols:
+            if col not in df_out1.columns:
+                df_out1[col] = ""
+        df_out1 = df_out1[desired_cols]
+        
+        # 예쁜 표 디자인 유지 + 행 선택 삭제 및 직접 수정이 가능한 data_editor 적용
+        edited_df1 = st.data_editor(
+            df_out1,
+            use_container_width=True,
+            hide_index=True,
+            num_rows="dynamic",
+            key="cult_data_editor"
+        )
+        
+        # 표에서 행을 지우거나 내용을 고쳤을 때 세션 상태에 즉시 반영
+        if not edited_df1.equals(df_out1):
+            st.session_state.culture_log = edited_df1.fillna("").astype(str).to_dict(orient="records")
+            st.rerun()
 
         st.markdown("---")
-        csv1 = df_out1.to_csv(index=False).encode('utf-8-sig')
+        csv1 = edited_df1.to_csv(index=False).encode('utf-8-sig')
         
         col_btn1, col_btn2 = st.columns([1, 4])
         with col_btn1:
