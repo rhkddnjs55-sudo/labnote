@@ -50,7 +50,7 @@ tab1, tab2, tab3 = st.tabs([
 ])
 
 # ==============================================================================
-# TAB 1: 세포주 배양 관리
+# TAB 1: 세포주 배양 관리 (즉시 반응형 UI 적용)
 # ==============================================================================
 with tab1:
     st.subheader("📋 세포주 배양 이력 관리")
@@ -67,53 +67,64 @@ with tab1:
                 st.error(f"파일을 읽는 중 오류가 발생했습니다: {e}")
 
     with st.expander("➕ 새 배양 기록 추가하기", expanded=True):
-        with st.form("culture_log_form"):
-            c1, c2, c3 = st.columns(3)
-            cell_line_options = ["Hs578T", "AGS", "SNU601", "HPAF-2", "HT-29", "JIMT-1", "B16F10", "직접 입력"]
-            selected_cell = c1.selectbox("세포주 선택", cell_line_options)
-            if selected_cell == "직접 입력":
-                m_cell = c1.text_input("직접 입력 세포주명", placeholder="예: RAW 264.7")
+        # 폼 밖에서 세포주 선택과 직접 입력을 배치하여 즉시 반응하도록 수정
+        c1, c2, c3 = st.columns(3)
+        cell_line_options = ["Hs578T", "AGS", "SNU601", "HPAF-2", "HT-29", "JIMT-1", "직접 입력"]
+        selected_cell = c1.selectbox("세포주 선택", cell_line_options, key="cult_cell_sel")
+        
+        if selected_cell == "직접 입력":
+            m_cell = c1.text_input("직접 입력 세포주명", placeholder="예: AGS", key="cult_custom_cell")
+        else:
+            m_cell = selected_cell
+            
+        m_pass = c2.text_input("Passage", value="P12", key="cult_pass")
+        m_date = c3.text_input("날짜", value=datetime.now().strftime("%Y-%m-%d"), key="cult_date")
+        
+        c4, c5 = st.columns(2)
+        m_media = c4.text_input("배지 조건", value="DMEM + 10% FBS + 1% AA", key="cult_media")
+        m_cultured_cells = c5.text_input("배양 세포수", placeholder="예: 1.0 × 10⁶ cells / 100mm dish", key="cult_cells")
+        
+        m_note = st.text_input("비고", placeholder="특이사항, 컨플루언시, 계대배양 비율 등", key="cult_note")
+        
+        if st.button("배양 기록 추가", type="primary", key="cult_submit_btn"):
+            if selected_cell == "직접 입력" and not m_cell:
+                st.error("⚠️ 직접 입력할 세포주 이름을 입력해 주세요.")
             else:
-                m_cell = selected_cell
-                
-            m_pass = c2.text_input("Passage", value="P12")
-            m_date = c3.text_input("날짜", value=datetime.now().strftime("%Y-%m-%d"))
-            
-            c4, c5 = st.columns(2)
-            m_media = c4.text_input("배지 조건", value="DMEM + 10% FBS + 1% AA")
-            # 배양 세포수 단위를 cells/mL로 명확하게 입력받도록 수정
-            m_cultured_cells = c5.text_input("배양 세포수 (cells/mL)", value="1.00 × 10⁶ cells/mL")
-            
-            m_note = st.text_input("비고", placeholder="특이사항, 컨플루언시, 계대배양 비율 등")
-            
-            submitted = st.form_submit_button("배양 기록 추가", type="primary")
-            
-            if submitted:
-                if selected_cell == "직접 입력" and not m_cell:
-                    st.error("⚠️ 직접 입력할 세포주 이름을 입력해 주세요.")
-                else:
-                    target_cell_name = m_cell if selected_cell == "직접 입력" else selected_cell
-                    new_entry = {
-                        "날짜": str(m_date),
-                        "세포주": str(target_cell_name),
-                        "Passage": str(m_pass),
-                        "배지 조건": str(m_media),
-                        "배양 세포수 (cells/mL)": str(m_cultured_cells),
-                        "비고": str(m_note) if m_note else ""
-                    }
-                    st.session_state.culture_log.insert(0, new_entry)
-                    st.success("✅ 배양 기록이 추가되었습니다!")
+                target_cell_name = m_cell if selected_cell == "직접 입력" else selected_cell
+                new_entry = {
+                    "날짜": str(m_date),
+                    "세포주": str(target_cell_name),
+                    "Passage": str(m_pass),
+                    "배지 조건": str(m_media),
+                    "배양 세포수": str(m_cultured_cells),
+                    "비고": str(m_note) if m_note else ""
+                }
+                st.session_state.culture_log.insert(0, new_entry)
+                st.success("✅ 배양 기록이 추가되었습니다!")
+                st.rerun()
 
     st.markdown("---")
     st.markdown("### 📄 저장된 배양 기록")
     
     if st.session_state.culture_log:
-        # 보기 좋은 표 형태로 출력하면서 정렬 효과 부여
-        df_out1 = pd.DataFrame(st.session_state.culture_log)
-        
-        # Streamlit st.dataframe을 활용해 중앙 정렬 및 인터랙티브 표 제공
-        st.dataframe(df_out1, use_container_width=True, hide_index=True)
+        for idx, item in enumerate(st.session_state.culture_log):
+            with st.container(border=True):
+                h1, h2, h3 = st.columns([2, 2, 1])
+                h1.markdown(f"**🧬 세포주:** {item.get('세포주', '')}")
+                h2.markdown(f"**Passage:** {item.get('Passage', '')}")
+                h3.markdown(f"**날짜:** {item.get('날짜', '')}")
+                
+                b1, b2 = st.columns(2)
+                b1.text(f"배지 조건: {item.get('배지 조건', '')}")
+                b2.text(f"배양 세포수: {item.get('배양 세포수', '')}")
+                if item.get('비고'):
+                    st.text(f"비고: {item.get('비고', '')}")
+                
+                if st.button("🗑️ 삭제", key=f"del_cult_{idx}"):
+                    st.session_state.culture_log.pop(idx)
+                    st.rerun()
 
+        df_out1 = pd.DataFrame(st.session_state.culture_log)
         csv1 = df_out1.to_csv(index=False).encode('utf-8-sig')
         
         st.markdown("---")
@@ -126,7 +137,7 @@ with tab1:
                 mime="text/csv"
             )
         with col_btn2:
-            if st.button("🗑️ 배양 기록 전체 초기화"):
+            if st.button("🗑️ 배양 기록 전체 초기화", key="cult_clear_btn"):
                 st.session_state.culture_log = []
                 st.rerun()
     else:
