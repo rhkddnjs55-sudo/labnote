@@ -27,7 +27,7 @@ tab1, tab2, tab3 = st.tabs([
 ])
 
 # ==============================================================================
-# TAB 1: 세포주 배양 관리 (개별 삭제 기능 추가)
+# TAB 1: 세포주 배양 관리 (행별 개별 삭제 버튼 적용)
 # ==============================================================================
 with tab1:
     st.subheader("📋 세포주 배양 이력 관리")
@@ -87,27 +87,47 @@ with tab1:
     st.markdown("### 📄 저장된 배양 기록")
     
     if st.session_state.culture_log:
-        # 표로 전체 보여주기
+        # 전체 다운로드를 위한 DataFrame 변환용
         df_out1 = pd.DataFrame(st.session_state.culture_log)
-        st.dataframe(df_out1, use_container_width=True, hide_index=True)
-
+        
+        # 헤더 느낌의 컬럼 타이틀 표시
+        h_col1, h_col2, h_col3, h_col4, h_col5, h_col6 = st.columns([1.2, 1.2, 0.8, 2.0, 1.8, 0.8])
+        h_col1.markdown("**날짜**")
+        h_col2.markdown("**세포주**")
+        h_col3.markdown("**Passage**")
+        h_col4.markdown("**배지 조건**")
+        h_col5.markdown("**배양 세포수 / 비고**")
+        h_col6.markdown("**관리**")
         st.markdown("---")
-        st.markdown("#### 🗑️ 개별 기록 삭제")
-        st.caption("잘못 입력된 기록의 번호(인덱스, 맨 위가 0번)를 선택하여 삭제할 수 있습니다.")
-        
-        # 삭제할 항목 선택 셀렉트박스 구성
-        row_options = [f"[{i}] 날짜: {item.get('날짜')} | 세포주: {item.get('세포주')} | Passage: {item.get('Passage')}" for i, item in enumerate(st.session_state.culture_log)]
-        selected_to_delete = st.selectbox("삭제할 기록 선택", row_options, key="cult_del_select")
-        
-        del_col1, del_col2 = st.columns([1, 4])
-        with del_col1:
-            if st.button("선택 항목 삭제", type="secondary", key="cult_del_btn"):
-                # 선택된 문자열에서 인덱스 번호 추출하여 삭제
-                idx_to_remove = int(selected_to_delete.split("]")[0].replace("[", ""))
-                removed_item = st.session_state.culture_log.pop(idx_to_remove)
-                st.success(f"🗑️ [{removed_item.get('세포주')}] 기록이 삭제되었습니다!")
-                st.rerun()
-                
+
+        # 각 기록을 순회하며 행마다 삭제 버튼 배치
+        indices_to_delete = []
+        for i, item in enumerate(st.session_state.culture_log):
+            r_col1, r_col2, r_col3, r_col4, r_col5, r_col6 = st.columns([1.2, 1.2, 0.8, 2.0, 1.8, 0.8])
+            
+            r_col1.write(item.get('날짜', ''))
+            r_col2.write(item.get('세포주', ''))
+            r_col3.write(item.get('Passage', ''))
+            r_col4.write(item.get('배지 조건', ''))
+            
+            note_text = f"수: {item.get('배양 세포수 (cells/mL)', '')}"
+            if item.get('비고'):
+                note_text += f" | {item.get('비고')}"
+            r_col5.write(note_text)
+            
+            # 맨 오른쪽 행에 삭제 버튼 배치
+            if r_col6.button("🗑️ 삭제", key=f"del_cult_{i}"):
+                indices_to_delete.append(i)
+            
+            st.markdown("<hr style='margin: 5px 0px; opacity: 0.2;'>", unsafe_allow_html=True)
+
+        # 삭제 버튼이 눌린 항목이 있다면 처리 후 새로고침
+        if indices_to_delete:
+            idx = indices_to_delete[0]
+            removed = st.session_state.culture_log.pop(idx)
+            st.success(f"🗑️ [{removed.get('세포주')}] 기록이 삭제되었습니다!")
+            st.rerun()
+
         st.markdown("---")
         csv1 = df_out1.to_csv(index=False).encode('utf-8-sig')
         
@@ -117,7 +137,7 @@ with tab1:
                 label="📥 배양 기록 CSV 다운로드",
                 data=csv1,
                 file_name=f"cell_culture_log_{datetime.now().strftime('%Y%m%d')}.csv",
-                mime="text/css" if False else "text/csv"
+                mime="text/csv"
             )
         with col_btn2:
             if st.button("🗑️ 배양 기록 전체 초기화", key="cult_clear_btn"):
