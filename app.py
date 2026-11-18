@@ -1,7 +1,6 @@
 import streamlit as st
 from datetime import datetime
 import pandas as pd
-import io
 
 # 페이지 기본 설정
 st.set_page_config(
@@ -9,28 +8,6 @@ st.set_page_config(
     page_icon="🧪",
     layout="wide"
 )
-
-# 표(DataFrame) 및 컨테이너 내용 가운데 정렬을 위한 CSS 스타일 주입
-st.markdown("""
-<style>
-    /* Streamlit 기본 dataframe 및 테이블 내용물 가운데 정렬 */
-    table {
-        margin: 0 auto;
-        text-align: center !important;
-    }
-    th {
-        text-align: center !important;
-        background-color: #f8fafc !important;
-    }
-    td {
-        text-align: center !important;
-    }
-    /* 카드 컨테이너 내부 텍스트 정돈 */
-    .element-container {
-        text-align: left;
-    }
-</style>
-""", unsafe_allow_html=True)
 
 # 세션 상태 초기화
 if "culture_log" not in st.session_state:
@@ -50,7 +27,7 @@ tab1, tab2, tab3 = st.tabs([
 ])
 
 # ==============================================================================
-# TAB 1: 세포주 배양 관리 (즉시 반응형 UI 적용)
+# TAB 1: 세포주 배양 관리 (즉시 반응형 입력 + 깔끔한 표 출력)
 # ==============================================================================
 with tab1:
     st.subheader("📋 세포주 배양 이력 관리")
@@ -67,13 +44,12 @@ with tab1:
                 st.error(f"파일을 읽는 중 오류가 발생했습니다: {e}")
 
     with st.expander("➕ 새 배양 기록 추가하기", expanded=True):
-        # 폼 밖에서 세포주 선택과 직접 입력을 배치하여 즉시 반응하도록 수정
         c1, c2, c3 = st.columns(3)
-        cell_line_options = ["Hs578T", "AGS", "SNU601", "HPAF-2", "HT-29", "JIMT-1", "직접 입력"]
+        cell_line_options = ["Hs578T", "AGS", "SNU601", "HPAF-2", "HT-29", "JIMT-1", "B16F10", "직접 입력"]
         selected_cell = c1.selectbox("세포주 선택", cell_line_options, key="cult_cell_sel")
         
         if selected_cell == "직접 입력":
-            m_cell = c1.text_input("직접 입력 세포주명", placeholder="예: AGS", key="cult_custom_cell")
+            m_cell = c1.text_input("직접 입력 세포주명", placeholder="예: RAW 264.7", key="cult_custom_cell")
         else:
             m_cell = selected_cell
             
@@ -82,7 +58,7 @@ with tab1:
         
         c4, c5 = st.columns(2)
         m_media = c4.text_input("배지 조건", value="DMEM + 10% FBS + 1% AA", key="cult_media")
-        m_cultured_cells = c5.text_input("배양 세포수", placeholder="예: 1.0 × 10⁶ cells / 100mm dish", key="cult_cells")
+        m_cultured_cells = c5.text_input("배양 세포수 (cells/mL)", value="1.00 × 10⁶ cells/mL", key="cult_cells")
         
         m_note = st.text_input("비고", placeholder="특이사항, 컨플루언시, 계대배양 비율 등", key="cult_note")
         
@@ -96,7 +72,7 @@ with tab1:
                     "세포주": str(target_cell_name),
                     "Passage": str(m_pass),
                     "배지 조건": str(m_media),
-                    "배양 세포수": str(m_cultured_cells),
+                    "배양 세포수 (cells/mL)": str(m_cultured_cells),
                     "비고": str(m_note) if m_note else ""
                 }
                 st.session_state.culture_log.insert(0, new_entry)
@@ -107,24 +83,9 @@ with tab1:
     st.markdown("### 📄 저장된 배양 기록")
     
     if st.session_state.culture_log:
-        for idx, item in enumerate(st.session_state.culture_log):
-            with st.container(border=True):
-                h1, h2, h3 = st.columns([2, 2, 1])
-                h1.markdown(f"**🧬 세포주:** {item.get('세포주', '')}")
-                h2.markdown(f"**Passage:** {item.get('Passage', '')}")
-                h3.markdown(f"**날짜:** {item.get('날짜', '')}")
-                
-                b1, b2 = st.columns(2)
-                b1.text(f"배지 조건: {item.get('배지 조건', '')}")
-                b2.text(f"배양 세포수: {item.get('배양 세포수', '')}")
-                if item.get('비고'):
-                    st.text(f"비고: {item.get('비고', '')}")
-                
-                if st.button("🗑️ 삭제", key=f"del_cult_{idx}"):
-                    st.session_state.culture_log.pop(idx)
-                    st.rerun()
-
         df_out1 = pd.DataFrame(st.session_state.culture_log)
+        st.dataframe(df_out1, use_container_width=True, hide_index=True)
+
         csv1 = df_out1.to_csv(index=False).encode('utf-8-sig')
         
         st.markdown("---")
@@ -161,31 +122,37 @@ with tab2:
                 st.error(f"파일을 읽는 중 오류가 발생했습니다: {e}")
 
     with st.expander("➕ Counting 결과 기록하기", expanded=True):
-        with st.form("counting_log_form"):
-            fc1, fc2, fc3 = st.columns(3)
-            cnt_date = fc1.text_input("날짜", value=datetime.now().strftime("%Y-%m-%d"))
-            cnt_cell = fc2.selectbox("세포주", ["Hs578T", "AGS", "SNU601", "HPAF-2", "HT-29", "JIMT-1", "B16F10", "기타"], key="cnt_cell_box")
-            cnt_pass = fc3.text_input("Passage", value="P12", key="cnt_pass_box")
-            
-            st.markdown("---")
-            
-            st.markdown("🔹 **1회차 측정 (Count #1 & Viability #1)**")
-            dc1, dc2 = st.columns(2)
-            c1_val = dc1.number_input("Count #1 (×10⁶ cells/mL)", min_value=0.0, value=2.50, step=0.01, format="%.2f")
-            v1_val = dc2.number_input("Viability #1 (%)", min_value=0.0, max_value=100.0, value=95.0, step=0.1, format="%.1f")
-            
-            st.markdown("")
-            
-            st.markdown("🔹 **2회차 측정 (Count #2 & Viability #2)** *(※ 1회만 측정한 경우 0으로 두세요)*")
-            dc3, dc4 = st.columns(2)
-            c2_val = dc3.number_input("Count #2 (×10⁶ cells/mL)", min_value=0.0, value=2.60, step=0.01, format="%.2f")
-            v2_val = dc4.number_input("Viability #2 (%)", min_value=0.0, max_value=100.0, value=96.0, step=0.1, format="%.1f")
+        fc1, fc2, fc3 = st.columns(3)
+        cnt_date = fc1.text_input("날짜", value=datetime.now().strftime("%Y-%m-%d"), key="cnt_date_in")
+        cnt_cell_opts = ["Hs578T", "AGS", "SNU601", "HPAF-2", "HT-29", "JIMT-1", "B16F10", "직접 입력"]
+        selected_cnt_cell = fc2.selectbox("세포주", cnt_cell_opts, key="cnt_cell_box")
+        if selected_cnt_cell == "직접 입력":
+            cnt_cell = fc2.text_input("직접 입력 세포주명", placeholder="예: RAW 264.7", key="cnt_custom_cell")
+        else:
+            cnt_cell = selected_cnt_cell
+        cnt_pass = fc3.text_input("Passage", value="P12", key="cnt_pass_box")
+        
+        st.markdown("---")
+        
+        st.markdown("🔹 **1회차 측정 (Count #1 & Viability #1)**")
+        dc1, dc2 = st.columns(2)
+        c1_val = dc1.number_input("Count #1 (×10⁶ cells/mL)", min_value=0.0, value=2.50, step=0.01, format="%.2f")
+        v1_val = dc2.number_input("Viability #1 (%)", min_value=0.0, max_value=100.0, value=95.0, step=0.1, format="%.1f")
+        
+        st.markdown("")
+        
+        st.markdown("🔹 **2회차 측정 (Count #2 & Viability #2)** *(※ 1회만 측정한 경우 0으로 두세요)*")
+        dc3, dc4 = st.columns(2)
+        c2_val = dc3.number_input("Count #2 (×10⁶ cells/mL)", min_value=0.0, value=2.60, step=0.01, format="%.2f")
+        v2_val = dc4.number_input("Viability #2 (%)", min_value=0.0, max_value=100.0, value=96.0, step=0.1, format="%.1f")
 
-            st.markdown("---")
-            cnt_note = st.text_input("비고", placeholder="예: 1:1 Trypan blue 희석")
-            
-            submitted_cnt = st.form_submit_button("Counting 기록 저장", type="primary")
-            if submitted_cnt:
+        st.markdown("---")
+        cnt_note = st.text_input("비고", placeholder="예: 1:1 Trypan blue 희석", key="cnt_note_in")
+        
+        if st.button("Counting 기록 저장", type="primary", key="cnt_submit_btn"):
+            if selected_cnt_cell == "직접 입력" and not cnt_cell:
+                st.error("⚠️ 직접 입력할 세포주 이름을 입력해 주세요.")
+            else:
                 if c2_val > 0:
                     avg_c = (c1_val + c2_val) / 2.0
                     conc_display = f"{avg_c:.2f} × 10⁶ cells/mL (#1: {c1_val}, #2: {c2_val})"
@@ -195,7 +162,7 @@ with tab2:
 
                 if v2_val > 0:
                     avg_v = (v1_val + v2_val) / 2.0
-                    viab_display = f"{avg_v:.1f}% (#1: {v1_val}%, {v2_val}%)"
+                    viab_display = f"{avg_v:.1f}% (#1: {v1_val}%, #2: {v2_val}%)"
                 else:
                     avg_v = v1_val
                     viab_display = f"{avg_v:.1f}%"
@@ -211,6 +178,7 @@ with tab2:
                 }
                 st.session_state.counting_log.insert(0, cnt_entry)
                 st.success(f"✅ Counting 저장 완료! (평균 농도: {avg_c:.2f} × 10⁶ cells/mL)")
+                st.rerun()
 
     if st.session_state.counting_log:
         st.markdown("### 📄 저장된 Counting 목록")
@@ -235,7 +203,7 @@ with tab2:
                 mime="text/csv"
             )
         with cbtn2:
-            if st.button("🗑️ Counting 기록 전체 초기화"):
+            if st.button("🗑️ Counting 기록 전체 초기화", key="cnt_clear_btn"):
                 st.session_state.counting_log = []
                 st.rerun()
 
@@ -248,7 +216,7 @@ with tab2:
     if st.session_state.counting_log:
         try:
             default_conc = float(st.session_state.counting_log[0].get('raw_avg_conc', 1.50))
-        except:
+        except Exception:
             pass
 
     calc_c1, calc_c2 = st.columns(2)
