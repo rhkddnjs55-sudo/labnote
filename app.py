@@ -1,7 +1,6 @@
 import streamlit as st
 from datetime import datetime
 import pandas as pd
-import os
 import io
 
 # 페이지 기본 설정
@@ -19,7 +18,7 @@ if "counting_log" not in st.session_state:
     st.session_state.counting_log = []
 
 st.title("🧪 Lab Assistant: 세포 배양 & 약물 계산기")
-st.caption("세포주 배양 관리 · Duplicate Counting 기록 & 필요 세포 계산 · 약물 희석 계산 (CSV 백업/복원 지원)")
+st.caption("세포주 배양 관리 · Duplicate Counting 기록 & 필요 세포 계산 · 약물 희석 계산")
 
 # 3개 탭 구성
 tab1, tab2, tab3 = st.tabs([
@@ -46,7 +45,8 @@ with tab1:
                 st.error(f"파일을 읽는 중 오류가 발생했습니다: {e}")
 
     with st.expander("➕ 새 배양 기록 추가하기", expanded=True):
-        with st.form("culture_log_form", clear_on_submit=True):
+        # 폼 내부에 form_submit_button 배치
+        with st.form("culture_log_form"):
             c1, c2, c3 = st.columns(3)
             cell_line_options = ["Hs578T", "AGS", "SNU601", "HPAF-2", "HT-29", "JIMT-1", "B16F10", "직접 입력"]
             selected_cell = c1.selectbox("세포주 선택", cell_line_options)
@@ -65,18 +65,23 @@ with tab1:
             m_note = st.text_input("비고", placeholder="특이사항, 컨플루언시, 계대배양 비율 등")
             
             submitted = st.form_submit_button("배양 기록 추가", type="primary")
-            if submitted and m_cell:
-                new_entry = {
-                    "날짜": m_date,
-                    "세포주": m_cell,
-                    "Passage": m_pass,
-                    "배지 조건": m_media,
-                    "배양 세포수": m_cultured_cells,
-                    "비고": m_note if m_note else ""
-                }
-                st.session_state.culture_log.insert(0, new_entry)
-                st.success("✅ 배양 기록이 추가되었습니다!")
-                st.rerun()
+            
+            # 폼 외부나 내부 처리 안정화
+            if submitted:
+                if selected_cell == "직접 입력" and not m_cell:
+                    st.error("⚠️ 직접 입력할 세포주 이름을 입력해 주세요.")
+                else:
+                    target_cell_name = m_cell if selected_cell == "직접 입력" else selected_cell
+                    new_entry = {
+                        "날짜": str(m_date),
+                        "세포주": str(target_cell_name),
+                        "Passage": str(m_pass),
+                        "배지 조건": str(m_media),
+                        "배양 세포수": str(m_cultured_cells),
+                        "비고": str(m_note) if m_note else ""
+                    }
+                    st.session_state.culture_log.insert(0, new_entry)
+                    st.success("✅ 배양 기록이 추가되었습니다!")
 
     st.markdown("---")
     st.markdown("### 📄 저장된 배양 기록")
@@ -116,11 +121,11 @@ with tab1:
                 st.session_state.culture_log = []
                 st.rerun()
     else:
-        st.info("등록된 배양 기록이 없습니다. (상단의 '이전 배양 기록 불러오기'를 통해 예전 CSV 파일을 올리실 수 있습니다.)")
+        st.info("등록된 배양 기록이 없습니다. 새 기록을 추가해 보세요!")
 
 
 # ==============================================================================
-# TAB 2: Counting 기록지 (Duplicate 순차 입력 및 평균값 강조)
+# TAB 2: Counting 기록지 & 필요 세포 수 계산기
 # ==============================================================================
 with tab2:
     st.subheader("1. Counting 결과 기록지 (Duplicate 순차 입력)")
@@ -136,7 +141,7 @@ with tab2:
                 st.error(f"파일을 읽는 중 오류가 발생했습니다: {e}")
 
     with st.expander("➕ Counting 결과 기록하기", expanded=True):
-        with st.form("counting_log_form", clear_on_submit=True):
+        with st.form("counting_log_form"):
             fc1, fc2, fc3 = st.columns(3)
             cnt_date = fc1.text_input("날짜", value=datetime.now().strftime("%Y-%m-%d"))
             cnt_cell = fc2.selectbox("세포주", ["Hs578T", "AGS", "SNU601", "HPAF-2", "HT-29", "JIMT-1", "B16F10", "기타"], key="cnt_cell_box")
@@ -176,17 +181,16 @@ with tab2:
                     viab_display = f"{avg_v:.1f}%"
 
                 cnt_entry = {
-                    "날짜": cnt_date,
-                    "세포주": cnt_cell,
-                    "Passage": cnt_pass,
-                    "평균 세포 농도": conc_display,
-                    "평균 생존율": viab_display,
+                    "날짜": str(cnt_date),
+                    "세포주": str(cnt_cell),
+                    "Passage": str(cnt_pass),
+                    "평균 세포 농도": str(conc_display),
+                    "평균 생존율": str(viab_display),
                     "raw_avg_conc": float(avg_c),
-                    "비고": cnt_note if cnt_note else ""
+                    "비고": str(cnt_note) if cnt_note else ""
                 }
                 st.session_state.counting_log.insert(0, cnt_entry)
-                st.success(f"✅ 저장 완료! ➔ **평균 농도: {avg_c:.2f} × 10⁶ cells/mL | 평균 생존율: {avg_v:.1f}%**")
-                st.rerun()
+                st.success(f"✅ Counting 저장 완료! (평균 농도: {avg_c:.2f} × 10⁶ cells/mL)")
 
     if st.session_state.counting_log:
         st.markdown("### 📄 저장된 Counting 목록")
