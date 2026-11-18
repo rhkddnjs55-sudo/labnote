@@ -58,7 +58,7 @@ with tab1:
         selected_cell = c1.selectbox("세포주 선택", cell_line_options, key="cult_cell_sel")
         
         if selected_cell == "직접 입력":
-            m_cell = c1.text_input("직접 입력 세포주명", placeholder="예: RAW 264.7", key="cult_custom_cell")
+            m_cell = c1.text_input("직접 입력 세포주명", placeholder="예: SNU601", key="cult_custom_cell")
         else:
             m_cell = selected_cell
             
