@@ -10,6 +10,28 @@ st.set_page_config(
     layout="wide"
 )
 
+# 표(DataFrame) 및 컨테이너 내용 가운데 정렬을 위한 CSS 스타일 주입
+st.markdown("""
+<style>
+    /* Streamlit 기본 dataframe 및 테이블 내용물 가운데 정렬 */
+    table {
+        margin: 0 auto;
+        text-align: center !important;
+    }
+    th {
+        text-align: center !important;
+        background-color: #f8fafc !important;
+    }
+    td {
+        text-align: center !important;
+    }
+    /* 카드 컨테이너 내부 텍스트 정돈 */
+    .element-container {
+        text-align: left;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 # 세션 상태 초기화
 if "culture_log" not in st.session_state:
     st.session_state.culture_log = []
@@ -45,7 +67,6 @@ with tab1:
                 st.error(f"파일을 읽는 중 오류가 발생했습니다: {e}")
 
     with st.expander("➕ 새 배양 기록 추가하기", expanded=True):
-        # 폼 내부에 form_submit_button 배치
         with st.form("culture_log_form"):
             c1, c2, c3 = st.columns(3)
             cell_line_options = ["Hs578T", "AGS", "SNU601", "HPAF-2", "HT-29", "JIMT-1", "B16F10", "직접 입력"]
@@ -60,13 +81,13 @@ with tab1:
             
             c4, c5 = st.columns(2)
             m_media = c4.text_input("배지 조건", value="DMEM + 10% FBS + 1% AA")
-            m_cultured_cells = c5.text_input("배양 세포수", placeholder="예: 1.0 × 10⁶ cells / 100mm dish")
+            # 배양 세포수 단위를 cells/mL로 명확하게 입력받도록 수정
+            m_cultured_cells = c5.text_input("배양 세포수 (cells/mL)", value="1.00 × 10⁶ cells/mL")
             
             m_note = st.text_input("비고", placeholder="특이사항, 컨플루언시, 계대배양 비율 등")
             
             submitted = st.form_submit_button("배양 기록 추가", type="primary")
             
-            # 폼 외부나 내부 처리 안정화
             if submitted:
                 if selected_cell == "직접 입력" and not m_cell:
                     st.error("⚠️ 직접 입력할 세포주 이름을 입력해 주세요.")
@@ -77,7 +98,7 @@ with tab1:
                         "세포주": str(target_cell_name),
                         "Passage": str(m_pass),
                         "배지 조건": str(m_media),
-                        "배양 세포수": str(m_cultured_cells),
+                        "배양 세포수 (cells/mL)": str(m_cultured_cells),
                         "비고": str(m_note) if m_note else ""
                     }
                     st.session_state.culture_log.insert(0, new_entry)
@@ -87,24 +108,12 @@ with tab1:
     st.markdown("### 📄 저장된 배양 기록")
     
     if st.session_state.culture_log:
-        for idx, item in enumerate(st.session_state.culture_log):
-            with st.container(border=True):
-                h1, h2, h3 = st.columns([2, 2, 1])
-                h1.markdown(f"**🧬 세포주:** {item.get('세포주', '')}")
-                h2.markdown(f"**Passage:** {item.get('Passage', '')}")
-                h3.markdown(f"**날짜:** {item.get('날짜', '')}")
-                
-                b1, b2 = st.columns(2)
-                b1.text(f"배지 조건: {item.get('배지 조건', '')}")
-                b2.text(f"배양 세포수: {item.get('배양 세포수', '')}")
-                if item.get('비고'):
-                    st.text(f"비고: {item.get('비고', '')}")
-                
-                if st.button("🗑️ 삭제", key=f"del_cult_{idx}"):
-                    st.session_state.culture_log.pop(idx)
-                    st.rerun()
-
+        # 보기 좋은 표 형태로 출력하면서 정렬 효과 부여
         df_out1 = pd.DataFrame(st.session_state.culture_log)
+        
+        # Streamlit st.dataframe을 활용해 중앙 정렬 및 인터랙티브 표 제공
+        st.dataframe(df_out1, use_container_width=True, hide_index=True)
+
         csv1 = df_out1.to_csv(index=False).encode('utf-8-sig')
         
         st.markdown("---")
@@ -194,28 +203,15 @@ with tab2:
 
     if st.session_state.counting_log:
         st.markdown("### 📄 저장된 Counting 목록")
-        for idx, item in enumerate(st.session_state.counting_log):
-            with st.container(border=True):
-                ch1, ch2, ch3 = st.columns([2, 2, 1])
-                ch1.markdown(f"**🧬 세포주:** {item.get('세포주', '')} ({item.get('Passage', '')})")
-                ch2.markdown(f"🔥 **평균 농도:** {item.get('평균 세포 농도', '')}")
-                ch3.markdown(f"**날짜:** {item.get('날짜', '')}")
-                
-                cb1, cb2 = st.columns(2)
-                cb1.text(f"평균 생존율: {item.get('평균 생존율', '')}")
-                if item.get('비고'):
-                    cb2.text(f"비고: {item.get('비고', '')}")
-                
-                if st.button("🗑️ 삭제", key=f"del_cnt_{idx}"):
-                    st.session_state.counting_log.pop(idx)
-                    st.rerun()
-
+        
         df_out2 = pd.DataFrame(st.session_state.counting_log)
         if 'raw_avg_conc' in df_out2.columns:
             df_export2 = df_out2.drop(columns=['raw_avg_conc'])
         else:
             df_export2 = df_out2
             
+        st.dataframe(df_export2, use_container_width=True, hide_index=True)
+
         csv2 = df_export2.to_csv(index=False).encode('utf-8-sig')
         
         st.markdown("---")
