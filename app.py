@@ -27,7 +27,7 @@ tab1, tab2, tab3 = st.tabs([
 ])
 
 # ==============================================================================
-# TAB 1: 세포주 배양 관리 (즉시 반응형 입력 + 깔끔한 표 출력)
+# TAB 1: 세포주 배양 관리 (즉시 반응형 입력 + 정상 저장 수정본)
 # ==============================================================================
 with tab1:
     st.subheader("📋 세포주 배양 이력 관리")
@@ -62,11 +62,12 @@ with tab1:
         
         m_note = st.text_input("비고", placeholder="특이사항, 컨플루언시, 계대배양 비율 등", key="cult_note")
         
+        # 버튼을 누를 때 데이터가 세션에 확실히 들어가도록 수정
         if st.button("배양 기록 추가", type="primary", key="cult_submit_btn"):
+            target_cell_name = m_cell if selected_cell == "직접 입력" else selected_cell
             if selected_cell == "직접 입력" and not m_cell:
                 st.error("⚠️ 직접 입력할 세포주 이름을 입력해 주세요.")
             else:
-                target_cell_name = m_cell if selected_cell == "직접 입력" else selected_cell
                 new_entry = {
                     "날짜": str(m_date),
                     "세포주": str(target_cell_name),
