@@ -27,7 +27,7 @@ tab1, tab2, tab3 = st.tabs([
 ])
 
 # ==============================================================================
-# TAB 1: 세포주 배양 관리 (체크 시에만 삭제 버튼 활성화 + 전체 초기화 제거)
+# TAB 1: 세포주 배양 관리 (표 내 체크박스 선택 삭제 적용본)
 # ==============================================================================
 with tab1:
     st.subheader("📋 세포주 배양 이력 관리")
@@ -40,7 +40,6 @@ with tab1:
                 try:
                     df_load = pd.read_csv(uploaded_culture_file)
                     
-                    # 옛날 CSV 파일의 컬럼명이 다를 경우 현재 컬럼명으로 통일
                     if "배양 세포수" in df_load.columns and "배양 세포수 (cells/mL)" not in df_load.columns:
                         df_load = df_load.rename(columns={"배양 세포수": "배양 세포수 (cells/mL)"})
                     elif "배양 세포수" in df_load.columns and "배양 세포수 (cells/mL)" in df_load.columns:
@@ -78,6 +77,7 @@ with tab1:
                 st.error("⚠️ 직접 입력할 세포주 이름을 입력해 주세요.")
             else:
                 new_entry = {
+                    "선택": False,  # 체크박스용 열 추가
                     "날짜": str(m_date),
                     "세포주": str(target_cell_name),
                     "Passage": str(m_pass),
@@ -93,41 +93,67 @@ with tab1:
 
     st.markdown("---")
     st.markdown("### 📄 저장된 배양 기록")
-    st.caption("💡 표에서 삭제할 행의 맨 왼쪽 체크박스를 선택하면 아래에 **[선택한 행 삭제]** 버튼이 나타납니다. 셀을 더블클릭하여 내용 수정도 가능합니다.")
+    st.caption("💡 표 맨 앞의 **[선택]** 칸에 체크박스를 체크한 후, 아래의 **[🗑️ 체크한 행 삭제]** 버튼을 누르면 해당 행들이 깔끔하게 지워집니다.")
     
     if st.session_state.culture_log:
+        # 데이터프레임 변환 시 '선택' 컬럼(체크박스) 기본값 False 보장
+        for item in st.session_state.culture_log:
+            if "선택" not in item:
+                item["선택"] = False
+            else:
+                item["선택"] = str(item["선택"]).lower() == "true"
+
         df_out1 = pd.DataFrame(st.session_state.culture_log)
         
-        desired_cols = ["날짜", "세포주", "Passage", "배지 조건", "배양 세포수 (cells/mL)", "비고"]
+        desired_cols = ["선택", "날짜", "세포주", "Passage", "배지 조건", "배양 세포수 (cells/mL)", "비고"]
         for col in desired_cols:
             if col not in df_out1.columns:
-                df_out1[col] = ""
+                df_out1[col] = False if col == "선택" else ""
         df_out1 = df_out1[desired_cols]
         
-        # 행 선택 기능이 활성화된 에디터
+        # 표에 체크박스가 포함된 에디터 렌더링
         edited_df1 = st.data_editor(
             df_out1,
             use_container_width=True,
             hide_index=True,
-            num_rows="fixed",  # 임의 추가/삭제는 체크박스 삭제 기능을 위해 고정
-            key="cult_data_editor"
+            num_rows="fixed",
+            column_config={
+                "선택": st.column_config.CheckboxColumn("선택", default=False)
+            },
+            key="cult_data_editor_chk"
         )
         
-        # 현재 선택된 행(체크박스) 정보 가져오기 (Streamlit 최신 selection 기능 활용)
-        # data_editor 자체의 수정(셀 내용 변경) 즉시 반영
-        if not edited_df1.equals(df_out1):
-            st.session_state.culture_log = edited_df1.fillna("").astype(str).to_dict(orient="records")
-            st.rerun()
-
+        # 삭제 버튼과 다운로드 버튼 배치
         st.markdown("---")
+        btn_c1, btn_c2 = st.columns([1, 3])
         
-        # 행을 지우거나 할 때 직관적으로 쓸 수 있도록 '선택 행 삭제' 인터페이스 구현
-        # 세션 상태 기반으로 체크된 행을 지우기 위한 멀티 셀렉트 혹은 인덱스 선택 방식 연동
-        row_indices = [f"[{i}] 날짜: {item.get('날짜')} | 세포주: {item.get('세포주')} | Passage: {item.get('Passage')}" for i, item in enumerate(st.session_state.culture_log)]
-        
-        col_dl, col_del = st.columns([1, 1])
-        with col_dl:
-            csv1 = edited_df1.to_csv(index=False).encode('utf-8-sig')
+        with btn_c1:
+            if st.button("🗑️ 체크한 행 삭제", type="primary", key="btn_del_checked"):
+                # 체크된 항목을 제외하고 남긴 것만 다시 세션에 저장
+                remaining_logs = []
+                deleted_count = 0
+                for idx, row in edited_df1.iterrows():
+                    if row["선택"] == True:
+                        deleted_count += 1
+                    else:
+                        # '선택' 컬럼을 제외한 순수 데이터만 딕셔너리로 저장
+                        clean_row = row.drop(labels=["선택"]).to_dict()
+                        # 값들을 문자열로 안전하게 변환
+                        clean_row = {k: str(v) for k, v in clean_row.items()}
+                        remaining_logs.append(clean_row)
+                
+                if deleted_count > 0:
+                    st.session_state.culture_log = remaining_logs
+                    st.success(f"🗑️ 선택한 {deleted_count}개의 기록이 삭제되었습니다!")
+                    st.rerun()
+                else:
+                    st.warning("⚠️ 삭제할 행의 체크박스를 먼저 선택해 주세요.")
+                    
+        with btn_c2:
+            # 다운로드할 때는 '선택' 컬럼을 제외하고 깔끔하게 추출
+            df_for_csv = edited_df1.drop(columns=["선택"]) if "선택" in edited_df1.columns else edited_df1
+            csv1 = df_for_csv.to_csv(index=False).encode('utf-8-sig')
+            
             st.download_button(
                 label="📥 현재 배양 기록 CSV 다운로드",
                 data=csv1,
@@ -135,15 +161,20 @@ with tab1:
                 mime="text/csv"
             )
             
-        # 체크박스 대안으로 깔끔하게 골라서 지우는 직관적 선택 삭제 드롭다운 배치 (오류 방지용 최적화)
-        with st.expander("🗑️ 특정 행 선택하여 삭제하기", expanded=False):
-            target_to_del = st.selectbox("삭제할 기록 선택", row_indices, key="select_row_to_del")
-            if st.button("선택한 기록 삭제", type="primary", key="btn_del_selected_row"):
-                idx_to_del = int(target_to_del.split("]")[0].replace("[", ""))
-                removed = st.session_state.culture_log.pop(idx_to_del)
-                st.success(f"🗑️ [{removed.get('세포주')}] 기록이 삭제되었습니다!")
-                st.rerun()
-                
+        # 체크박스 변경 외에 셀 내용을 직접 수정했을 때 실시간 반영
+        # (단, 체크박스 토글 자체로 새로고침 루프 도는 것을 방지하기 위해 데이터 내용 비교)
+        current_data_check = edited_df1.drop(columns=["선택"]).to_dict(orient="records")
+        old_data_check = pd.DataFrame(st.session_state.culture_log).drop(columns=["선택"], errors="ignore").to_dict(orient="records")
+        
+        if current_data_check != old_data_check:
+            updated_logs = []
+            for _, row in edited_df1.iterrows():
+                clean_row = {k: str(v) for k, v in row.drop(labels=["선택"]).to_dict().items()}
+                # 기존 선택 상태 유지
+                clean_row["선택"] = bool(row["선택"])
+                updated_logs.append(clean_row)
+            st.session_state.culture_log = updated_logs
+
     else:
         st.info("등록된 배양 기록이 없습니다. 새 기록을 추가하거나 CSV 파일을 불러와 보세요!")
 
