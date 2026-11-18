@@ -27,22 +27,26 @@ tab1, tab2, tab3 = st.tabs([
 ])
 
 # ==============================================================================
-# TAB 1: 세포주 배양 관리 (CSV 로드 및 추가 버그 완벽 수정본)
+# TAB 1: 세포주 배양 관리 (파일 업로드 충돌 완벽 해결본)
 # ==============================================================================
 with tab1:
     st.subheader("📋 세포주 배양 이력 관리")
 
-    # 과거 기록 CSV 파일 업로드 기능
+    # 과거 기록 CSV 파일 업로드 기능 (콜백 함수나 상태 분리를 통해 충돌 방지)
     with st.expander("📂 이전 배양 기록(CSV) 불러오기", expanded=False):
         uploaded_culture_file = st.file_uploader("예전에 다운로드한 배양 기록 CSV 파일을 업로드하세요", type=["csv"], key="cult_up")
+        
+        # 파일이 새로 업로드되었을 때 딱 한 번만 데이터에 반영하고 기억하기 위한 처리
         if uploaded_culture_file is not None:
-            try:
-                df_load = pd.read_csv(uploaded_culture_file)
-                # 불러온 데이터를 순수 딕셔너리 리스트로 안전하게 변환하여 세션에 저장
-                st.session_state.culture_log = df_load.astype(str).to_dict(orient="records")
-                st.success("✅ 이전 배양 기록을 성공적으로 불러왔습니다!")
-            except Exception as e:
-                st.error(f"파일을 읽는 중 오류가 발생했습니다: {e}")
+            # 파일 이름이 바꼈거나 아직 처리 안 된 경우에만 로드
+            if st.session_state.get("last_uploaded_file") != uploaded_culture_file.name:
+                try:
+                    df_load = pd.read_csv(uploaded_culture_file)
+                    st.session_state.culture_log = df_load.astype(str).to_dict(orient="records")
+                    st.session_state["last_uploaded_file"] = uploaded_culture_file.name
+                    st.success("✅ 이전 배양 기록을 성공적으로 불러왔습니다! 이제 파일을 닫거나 그대로 새 기록을 추가하셔도 됩니다.")
+                except Exception as e:
+                    st.error(f"파일을 읽는 중 오류가 발생했습니다: {e}")
 
     with st.expander("➕ 새 배양 기록 추가하기", expanded=True):
         c1, c2, c3 = st.columns(3)
@@ -76,7 +80,6 @@ with tab1:
                     "배양 세포수 (cells/mL)": str(m_cultured_cells),
                     "비고": str(m_note) if m_note else ""
                 }
-                # 확실하게 리스트 맨 앞에 삽입
                 if not isinstance(st.session_state.culture_log, list):
                     st.session_state.culture_log = []
                 st.session_state.culture_log.insert(0, new_entry)
@@ -104,6 +107,7 @@ with tab1:
         with col_btn2:
             if st.button("🗑️ 배양 기록 전체 초기화", key="cult_clear_btn"):
                 st.session_state.culture_log = []
+                st.session_state["last_uploaded_file"] = None  # 업로드 기록도 함께 초기화
                 st.rerun()
     else:
         st.info("등록된 배양 기록이 없습니다. 새 기록을 추가해 보세요!")
