@@ -27,7 +27,7 @@ tab1, tab2, tab3 = st.tabs([
 ])
 
 # ==============================================================================
-# TAB 1: 세포주 배양 관리 (즉시 반응형 입력 + 정상 저장 수정본)
+# TAB 1: 세포주 배양 관리 (CSV 로드 및 추가 버그 완벽 수정본)
 # ==============================================================================
 with tab1:
     st.subheader("📋 세포주 배양 이력 관리")
@@ -38,7 +38,8 @@ with tab1:
         if uploaded_culture_file is not None:
             try:
                 df_load = pd.read_csv(uploaded_culture_file)
-                st.session_state.culture_log = df_load.to_dict(orient="records")
+                # 불러온 데이터를 순수 딕셔너리 리스트로 안전하게 변환하여 세션에 저장
+                st.session_state.culture_log = df_load.astype(str).to_dict(orient="records")
                 st.success("✅ 이전 배양 기록을 성공적으로 불러왔습니다!")
             except Exception as e:
                 st.error(f"파일을 읽는 중 오류가 발생했습니다: {e}")
@@ -62,7 +63,6 @@ with tab1:
         
         m_note = st.text_input("비고", placeholder="특이사항, 컨플루언시, 계대배양 비율 등", key="cult_note")
         
-        # 버튼을 누를 때 데이터가 세션에 확실히 들어가도록 수정
         if st.button("배양 기록 추가", type="primary", key="cult_submit_btn"):
             target_cell_name = m_cell if selected_cell == "직접 입력" else selected_cell
             if selected_cell == "직접 입력" and not m_cell:
@@ -76,6 +76,9 @@ with tab1:
                     "배양 세포수 (cells/mL)": str(m_cultured_cells),
                     "비고": str(m_note) if m_note else ""
                 }
+                # 확실하게 리스트 맨 앞에 삽입
+                if not isinstance(st.session_state.culture_log, list):
+                    st.session_state.culture_log = []
                 st.session_state.culture_log.insert(0, new_entry)
                 st.success("✅ 배양 기록이 추가되었습니다!")
                 st.rerun()
