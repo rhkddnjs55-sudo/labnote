@@ -336,24 +336,61 @@ with tab2:
                 st.rerun()
 
     st.markdown("---")
-
+    
     st.subheader("2. 필요 세포 수 & Medium 계산기")
-    st.caption("측정된 평균 세포 농도와 Well당 분주 부피를 입력하면 필요한 세포 현탁액 및 배지(Medium) 부피를 계산합니다.")
+    st.caption("위 Duplicate 카운팅 평균값(또는 저장된 최근 카운팅 값)이 자동으로 반영되며, Well당 분주 부피를 입력하면 필요한 현탁액 및 배지(Medium) 부피를 계산합니다.")
 
-    default_conc = 1.50
-    if st.session_state.counting_log:
+    # 위 Duplicate 입력값 기준 실시간 평균 계산 (c1_val, c2_val가 0보다 크면 우선 반영)
+    live_avg_c = (c1_val + c2_val) / 2.0 if c2_val > 0 else c1_val
+    if live_avg_c > 0:
+        auto_conc_val = round(float(live_avg_c), 2)
+    elif st.session_state.counting_log:
         try:
-            default_conc = float(st.session_state.counting_log[0].get('raw_avg_conc', 1.50))
+            auto_conc_val = round(float(st.session_state.counting_log[0].get('raw_avg_conc', 1.50)), 2)
         except Exception:
-            pass
+            auto_conc_val = 1.50
+    else:
+        auto_conc_val = 1.50
+
+    # Duplicate 입력값이 바뀔 때 계산기 입력칸(session_state)도 함께 업데이트
+    if "last_auto_conc_val" not in st.session_state:
+        st.session_state["last_auto_conc_val"] = auto_conc_val
+    if "calc_measured_conc" not in st.session_state:
+        st.session_state["calc_measured_conc"] = auto_conc_val
+
+    if auto_conc_val != st.session_state["last_auto_conc_val"]:
+        st.session_state["calc_measured_conc"] = auto_conc_val
+        st.session_state["last_auto_conc_val"] = auto_conc_val
 
     calc_c1, calc_c2 = st.columns(2)
     with calc_c1:
-        measured_conc_val = st.number_input("측정된 세포 농도 (평균, × 10⁶ cells/mL)", min_value=0.01, value=default_conc, step=0.1, format="%.2f")
-        vol_per_well_ml = st.number_input("Seeding에 필요한 Well당 부피 (Medium 량, mL)", min_value=0.05, value=1.0, step=0.1, format="%.2f")
+        measured_conc_val = st.number_input(
+            "측정된 세포 농도 (평균, × 10⁶ cells/mL)",
+            min_value=0.01,
+            step=0.01,
+            format="%.2f",
+            key="calc_measured_conc"
+        )
+        vol_per_well_ml = st.number_input(
+            "Seeding에 필요한 Well당 부피 (Medium 량, mL)",
+            min_value=0.05,
+            value=1.0,
+            step=0.1,
+            format="%.2f"
+        )
     with calc_c2:
-        cells_per_unit = st.number_input("Well당 필요한 세포 수 (cells/well)", min_value=100, value=100000, step=10000)
-        num_units = st.number_input("필요한 Well 개수 (개)", min_value=1, value=10, step=1)
+        cells_per_unit = st.number_input(
+            "Well당 필요한 세포 수 (cells/well)",
+            min_value=100,
+            value=100000,
+            step=10000
+        )
+        num_units = st.number_input(
+            "필요한 Well 개수 (개)",
+            min_value=1,
+            value=10,
+            step=1
+        )
 
     conc_cells_per_ml = measured_conc_val * 1e6
     needed_total_cells = cells_per_unit * num_units
@@ -366,7 +403,7 @@ with tab2:
     rm1.metric("필요한 총 세포 수", f"{needed_total_cells/1e6:.2f} × 10⁶ cells", f"{needed_total_cells:,.0f} cells")
     rm2.metric("취해야 할 세포 현탁액", f"{needed_susp_vol_ml * 1000:,.1f} μL", f"{needed_susp_vol_ml:.3f} mL")
     rm3.metric("총 부피 (총 Medium 량)", f"{total_medium_vol_ml:,.2f} mL", f"{total_medium_vol_ml * 1000:,.0f} μL")
-
+    
     if fresh_medium_vol_ml >= 0:
         rm4.metric("추가할 새 Medium 부피", f"{fresh_medium_vol_ml:,.2f} mL", f"{fresh_medium_vol_ml * 1000:,.1f} μL")
     else:
