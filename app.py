@@ -27,13 +27,17 @@ tab1, tab2, tab3 = st.tabs([
 ])
 
 # ==============================================================================
-# TAB 1: 세포주 배양 관리 (Viability & 분주된 세포수 추가본)
+# TAB 1: 세포주 배양 관리 (TAB 2 카운팅 결과 자동 수신 연동본)
 # ==============================================================================
 with tab1:
     st.subheader("📋 세포주 배양 이력 관리")
 
     if "last_uploaded_file_id" not in st.session_state:
         st.session_state["last_uploaded_file_id"] = None
+    if "cult_cells" not in st.session_state:
+        st.session_state["cult_cells"] = "1.00 × 10⁶ cells/mL"
+    if "cult_viability" not in st.session_state:
+        st.session_state["cult_viability"] = "95.0 %"
 
     # 과거 기록 CSV 파일 업로드 기능
     with st.expander("📂 이전 배양 기록(CSV) 불러오기", expanded=False):
@@ -56,7 +60,6 @@ with tab1:
                     if df_load.empty:
                         st.warning("⚠️ 업로드한 CSV 파일에 데이터가 없습니다.")
                     else:
-                        # 옛날 CSV 파일의 컬럼명이 다를 경우 현재 컬럼명으로 통일
                         if "배양 세포수" in df_load.columns and "배양 세포수 (cells/mL)" not in df_load.columns:
                             df_load = df_load.rename(columns={"배양 세포수": "배양 세포수 (cells/mL)"})
                         elif "배양 세포수" in df_load.columns and "배양 세포수 (cells/mL)" in df_load.columns:
@@ -77,6 +80,9 @@ with tab1:
             st.session_state["last_uploaded_file_id"] = None
 
     with st.expander("➕ 새 배양 기록 추가하기", expanded=True):
+        if st.session_state.pop("transferred_from_tab2", False):
+            st.info("📥 TAB 2(Cell Counting)에서 계산된 **배양 세포수**와 **Viability (%)**가 자동으로 입력되었습니다.")
+
         c1, c2, c3 = st.columns(3)
         cell_line_options = ["Hs578T", "AGS", "SNU601", "HPAF-2", "HT-29", "JIMT-1", "B16F10", "직접 입력"]
         selected_cell = c1.selectbox("세포주 선택", cell_line_options, key="cult_cell_sel")
@@ -91,10 +97,10 @@ with tab1:
 
         c4, c5 = st.columns(2)
         m_media = c4.text_input("배지 조건", value="DMEM + 10% FBS + 1% AA", key="cult_media")
-        m_cultured_cells = c5.text_input("배양 세포수 (cells/mL)", value="1.00 × 10⁶ cells/mL", key="cult_cells")
+        m_cultured_cells = c5.text_input("배양 세포수 (cells/mL)", key="cult_cells")
 
         c6, c7 = st.columns(2)
-        m_viability = c6.text_input("Viability (%)", value="95.0 %", key="cult_viability")
+        m_viability = c6.text_input("Viability (%)", key="cult_viability")
         m_seeded_cells = c7.text_input("분주된 세포수", value="5.00 × 10⁵ cells", key="cult_seeded")
 
         m_note = st.text_input("비고", placeholder="특이사항, 컨플루언시, 계대배양 비율 등", key="cult_note")
@@ -252,6 +258,15 @@ with tab2:
 
         st.markdown("---")
         cnt_note = st.text_input("비고", placeholder="예: 1:1 Trypan blue 희석", key="cnt_note_in")
+
+# [TAB 2 계산 결과 출력 바로 아래에 추가]
+    # 예: conc_str = f"{cell_conc / 1e6:.2f} × 10⁶ cells/mL"
+    # 예: viability_str = f"{viability:.1f} %"
+    if st.button("📤 계산된 세포수 & Viability를 TAB 1 배양 기록으로 보내기", key="send_to_tab1_btn"):
+        st.session_state["cult_cells"] = conc_str
+        st.session_state["cult_viability"] = viability_str
+        st.session_state["transferred_from_tab2"] = True
+        st.success("✅ TAB 1의 '배양 세포수'와 'Viability (%)' 입력칸에 값이 반영되었습니다! TAB 1로 이동해 확인하세요.")
         
         if st.button("Counting 기록 저장", type="primary", key="cnt_submit_btn"):
             if selected_cnt_cell == "직접 입력" and not cnt_cell:
