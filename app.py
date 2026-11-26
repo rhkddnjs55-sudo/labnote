@@ -94,7 +94,7 @@ with tab1:
         m_cultured_cells = c5.text_input("배양 세포수 (cells/mL)", value="1.00 × 10⁶ cells/mL", key="cult_cells")
 
         c6, c7 = st.columns(2)
-        m_viability = c6.text_input("Viability (%)", value="95.0%", key="cult_viability")
+        m_viability = c6.text_input("Viability (%)", value="95.0 %", key="cult_viability")
         m_seeded_cells = c7.text_input("분주된 세포수", value="5.00 × 10⁵ cells", key="cult_seeded")
 
         m_note = st.text_input("비고", placeholder="특이사항, 컨플루언시, 계대배양 비율 등", key="cult_note")
