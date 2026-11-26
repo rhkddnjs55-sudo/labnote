@@ -27,7 +27,7 @@ tab1, tab2, tab3 = st.tabs([
 ])
 
 # ==============================================================================
-# TAB 1: 세포주 배양 관리 (TAB 2 카운팅 결과 자동 수신 연동본)
+# TAB 1: 세포주 배양 관리 (위젯 생성 전 대기 키 반영본)
 # ==============================================================================
 with tab1:
     st.subheader("📋 세포주 배양 이력 관리")
@@ -38,6 +38,12 @@ with tab1:
         st.session_state["cult_cells"] = "1.00 × 10⁶ cells/mL"
     if "cult_viability" not in st.session_state:
         st.session_state["cult_viability"] = "95.0 %"
+
+    # TAB 2에서 넘어온 대기 값이 있으면 위젯 생성 전에 반영
+    if "pending_cult_cells" in st.session_state:
+        st.session_state["cult_cells"] = st.session_state.pop("pending_cult_cells")
+    if "pending_cult_viability" in st.session_state:
+        st.session_state["cult_viability"] = st.session_state.pop("pending_cult_viability")
 
     # 과거 기록 CSV 파일 업로드 기능
     with st.expander("📂 이전 배양 기록(CSV) 불러오기", expanded=False):
@@ -297,8 +303,8 @@ with tab2:
 
         with b_col2:
             if st.button("📤 계산된 세포수 & Viability를 TAB 1 배양 기록으로 보내기", key="send_to_tab1_btn"):
-                st.session_state["cult_cells"] = conc_str
-                st.session_state["cult_viability"] = viability_str
+                st.session_state["pending_cult_cells"] = conc_str
+                st.session_state["pending_cult_viability"] = viability_str
                 st.session_state["transferred_from_tab2"] = True
                 st.success("✅ TAB 1의 '배양 세포수'와 'Viability (%)' 입력칸에 값이 반영되었습니다! TAB 1로 이동해 확인하세요.")
 
