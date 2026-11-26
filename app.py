@@ -220,7 +220,7 @@ with tab1:
 # ==============================================================================
 with tab2:
     st.subheader("1. Counting 결과 기록지 (Duplicate 순차 입력)")
-    
+
     with st.expander("📂 이전 Counting 기록(CSV) 불러오기", expanded=False):
         uploaded_cnt_file = st.file_uploader("예전에 다운로드한 Counting 기록 CSV 파일을 업로드하세요", type=["csv"], key="cnt_up")
         if uploaded_cnt_file is not None:
@@ -241,16 +241,16 @@ with tab2:
         else:
             cnt_cell = selected_cnt_cell
         cnt_pass = fc3.text_input("Passage", value="P12", key="cnt_pass_box")
-        
+
         st.markdown("---")
-        
+
         st.markdown("🔹 **1회차 측정 (Count #1 & Viability #1)**")
         dc1, dc2 = st.columns(2)
         c1_val = dc1.number_input("Count #1 (×10⁶ cells/mL)", min_value=0.0, value=2.50, step=0.01, format="%.2f")
         v1_val = dc2.number_input("Viability #1 (%)", min_value=0.0, max_value=100.0, value=95.0, step=0.1, format="%.1f")
-        
+
         st.markdown("")
-        
+
         st.markdown("🔹 **2회차 측정 (Count #2 & Viability #2)** *(※ 1회만 측정한 경우 0으로 두세요)*")
         dc3, dc4 = st.columns(2)
         c2_val = dc3.number_input("Count #2 (×10⁶ cells/mL)", min_value=0.0, value=2.60, step=0.01, format="%.2f")
@@ -259,59 +259,62 @@ with tab2:
         st.markdown("---")
         cnt_note = st.text_input("비고", placeholder="예: 1:1 Trypan blue 희석", key="cnt_note_in")
 
-# [TAB 2 계산 결과 출력 바로 아래에 추가]
-    # 예: conc_str = f"{cell_conc / 1e6:.2f} × 10⁶ cells/mL"
-    # 예: viability_str = f"{viability:.1f} %"
-    if st.button("📤 계산된 세포수 & Viability를 TAB 1 배양 기록으로 보내기", key="send_to_tab1_btn"):
-        st.session_state["cult_cells"] = conc_str
-        st.session_state["cult_viability"] = viability_str
-        st.session_state["transferred_from_tab2"] = True
-        st.success("✅ TAB 1의 '배양 세포수'와 'Viability (%)' 입력칸에 값이 반영되었습니다! TAB 1로 이동해 확인하세요.")
-        
-        if st.button("Counting 기록 저장", type="primary", key="cnt_submit_btn"):
-            if selected_cnt_cell == "직접 입력" and not cnt_cell:
-                st.error("⚠️ 직접 입력할 세포주 이름을 입력해 주세요.")
-            else:
-                if c2_val > 0:
-                    avg_c = (c1_val + c2_val) / 2.0
-                    conc_display = f"{avg_c:.2f} × 10⁶ cells/mL (#1: {c1_val}, #2: {c2_val})"
-                else:
-                    avg_c = c1_val
-                    conc_display = f"{avg_c:.2f} × 10⁶ cells/mL"
+        # 1회/2회 입력값 기준 평균 농도 및 평균 생존율 계산
+        avg_c = (c1_val + c2_val) / 2.0 if c2_val > 0 else c1_val
+        avg_v = (v1_val + v2_val) / 2.0 if v2_val > 0 else v1_val
 
-                if v2_val > 0:
-                    avg_v = (v1_val + v2_val) / 2.0
-                    viab_display = f"{avg_v:.1f}% (#1: {v1_val}%, #2: {v2_val}%)"
-                else:
-                    avg_v = v1_val
-                    viab_display = f"{avg_v:.1f}%"
+        conc_str = f"{avg_c:.2f} × 10⁶ cells/mL"
+        viability_str = f"{avg_v:.1f} %"
 
-                cnt_entry = {
-                    "날짜": str(cnt_date),
-                    "세포주": str(cnt_cell),
-                    "Passage": str(cnt_pass),
-                    "평균 세포 농도": str(conc_display),
-                    "평균 생존율": str(viab_display),
-                    "raw_avg_conc": float(avg_c),
-                    "비고": str(cnt_note) if cnt_note else ""
-                }
-                st.session_state.counting_log.insert(0, cnt_entry)
-                st.success(f"✅ Counting 저장 완료! (평균 농도: {avg_c:.2f} × 10⁶ cells/mL)")
-                st.rerun()
+        if c2_val > 0:
+            conc_display = f"{avg_c:.2f} × 10⁶ cells/mL (#1: {c1_val}, #2: {c2_val})"
+        else:
+            conc_display = f"{avg_c:.2f} × 10⁶ cells/mL"
+
+        if v2_val > 0:
+            viab_display = f"{avg_v:.1f}% (#1: {v1_val}%, #2: {v2_val}%)"
+        else:
+            viab_display = f"{avg_v:.1f}%"
+
+        b_col1, b_col2 = st.columns([1, 1.4])
+        with b_col1:
+            if st.button("Counting 기록 저장", type="primary", key="cnt_submit_btn"):
+                if selected_cnt_cell == "직접 입력" and not cnt_cell:
+                    st.error("⚠️ 직접 입력할 세포주 이름을 입력해 주세요.")
+                else:
+                    cnt_entry = {
+                        "날짜": str(cnt_date),
+                        "세포주": str(cnt_cell),
+                        "Passage": str(cnt_pass),
+                        "평균 세포 농도": str(conc_display),
+                        "평균 생존율": str(viab_display),
+                        "raw_avg_conc": float(avg_c),
+                        "비고": str(cnt_note) if cnt_note else ""
+                    }
+                    st.session_state.counting_log.insert(0, cnt_entry)
+                    st.success(f"✅ Counting 저장 완료! (평균 농도: {avg_c:.2f} × 10⁶ cells/mL)")
+                    st.rerun()
+
+        with b_col2:
+            if st.button("📤 계산된 세포수 & Viability를 TAB 1 배양 기록으로 보내기", key="send_to_tab1_btn"):
+                st.session_state["cult_cells"] = conc_str
+                st.session_state["cult_viability"] = viability_str
+                st.session_state["transferred_from_tab2"] = True
+                st.success("✅ TAB 1의 '배양 세포수'와 'Viability (%)' 입력칸에 값이 반영되었습니다! TAB 1로 이동해 확인하세요.")
 
     if st.session_state.counting_log:
         st.markdown("### 📄 저장된 Counting 목록")
-        
+
         df_out2 = pd.DataFrame(st.session_state.counting_log)
         if 'raw_avg_conc' in df_out2.columns:
             df_export2 = df_out2.drop(columns=['raw_avg_conc'])
         else:
             df_export2 = df_out2
-            
+
         st.dataframe(df_export2, use_container_width=True, hide_index=True)
 
         csv2 = df_export2.to_csv(index=False).encode('utf-8-sig')
-        
+
         st.markdown("---")
         cbtn1, cbtn2 = st.columns([1, 4])
         with cbtn1:
@@ -327,10 +330,10 @@ with tab2:
                 st.rerun()
 
     st.markdown("---")
-    
+
     st.subheader("2. 필요 세포 수 & Medium 계산기")
     st.caption("측정된 평균 세포 농도와 Well당 분주 부피를 입력하면 필요한 세포 현탁액 및 배지(Medium) 부피를 계산합니다.")
-    
+
     default_conc = 1.50
     if st.session_state.counting_log:
         try:
@@ -357,7 +360,7 @@ with tab2:
     rm1.metric("필요한 총 세포 수", f"{needed_total_cells/1e6:.2f} × 10⁶ cells", f"{needed_total_cells:,.0f} cells")
     rm2.metric("취해야 할 세포 현탁액", f"{needed_susp_vol_ml * 1000:,.1f} μL", f"{needed_susp_vol_ml:.3f} mL")
     rm3.metric("총 부피 (총 Medium 량)", f"{total_medium_vol_ml:,.2f} mL", f"{total_medium_vol_ml * 1000:,.0f} μL")
-    
+
     if fresh_medium_vol_ml >= 0:
         rm4.metric("추가할 새 Medium 부피", f"{fresh_medium_vol_ml:,.2f} mL", f"{fresh_medium_vol_ml * 1000:,.1f} μL")
     else:
